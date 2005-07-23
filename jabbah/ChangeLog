@@ -1,3 +1,7 @@
+2005-07-24 00:40 Bazyli Zygan <bazyli@gmail.com>
+	* Refactored code for context handling
+	* Added jabber:iq:version handling
+
 2005-07-19 01:07 Bazyli Zygan <bazyli@gmail.com>
 	* Adapted for autotools. First upload to CVS.
 	  This is still not a good idea to use it :)

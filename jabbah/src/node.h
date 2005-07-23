@@ -2,49 +2,23 @@
 #define _NODE_H_
 
 
-typedef struct _jabbah_attr_list_t {
-	char			*name;
-        char                    *namespace;
-	char			*value;
-	struct _jabbah_attr_list_t *next;
-} jabbah_attr_list_t;
-
-typedef struct _jabbah_namespace_t {
-        char                    *id;
-        char                    *value;
-        struct _jabbah_namespace_t *next;
-} jabbah_namespace_t;
-
-typedef struct _jabbah_node_t {
-        struct _jabbah_node_t   *parent;
-	char 			*name;
-	char			*value;
-        char                    *lang;
-        char                    *namespace;
-        jabbah_namespace_t      *registered_ns;
-	jabbah_attr_list_t	*attributes;
-	struct _jabbah_node_t	*subnodes;
-        struct _jabbah_node_t   *next;
-} jabbah_node_t;
-
+#include "jabbah.h"
 
 
 // Callback registration
-int             node_callback_register(char *node_name, void (*cb)(jabbah_node_t *node));
-int             node_callback_unregister(char *node_name);
-void            node_callback_flush(void);
+int             node_callback_register(jabbah_context_t *cnx, char *node_name, void (*cb)(jabbah_context_t *, jabbah_node_t *));
+int             node_callback_unregister(jabbah_context_t *cnx, char *node_name);
+void            node_callback_flush(jabbah_context_t *cnx);
 
-void            node_free_resources(void);
+
 // Functions for expat
-void            node_set_env(int socket, char *lang, char *node_ns, jabbah_namespace_t *ns);
-jabbah_node_t * node_create(const char *name, const char **attr); 
-jabbah_node_t * node_append_value(const char *value, int len);
-jabbah_node_t * node_close(const char *name);
+jabbah_node_t * node_create(jabbah_context_t *cnx, const char *name, const char **attr); 
+jabbah_node_t * node_append_value(jabbah_context_t *cnx, const char *value, int len);
+jabbah_node_t * node_close(jabbah_context_t *cnx, const char *name);
 
 // Additional node operations
-void            node_print(jabbah_node_t *node);
-void            node_print2(jabbah_node_t *node);
-char *          node_to_string(jabbah_node_t *node);
+void            node_print(jabbah_context_t *cnx, jabbah_node_t *node);
+char *          node_to_string(jabbah_context_t *cnx, jabbah_node_t *node);
 char *          node_to_string_ex(jabbah_node_t *node, char *curr_lang, char *curr_ns);
 void            node_free(jabbah_node_t *node);
 

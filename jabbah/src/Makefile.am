@@ -21,13 +21,17 @@ AM_LFLAGS = -p -s -i
 
 lib_LTLIBRARIES = libjabbah.la
 
+libjabbah_ladir = $(prefix)/include/
+libjabbah_la_HEADERS = jabbah.h
+
 libjabbah_la_SOURCES = jabbah.h jabbah.c node.h node.c namespace.c \
 			presence.h presence.c message.h message.c \
-			iq.h iq.c auth.h auth.c sha1.h sha1.c
+			iq.h iq.c auth.h auth.c sha1.h sha1.c \
+			version.h version.c
 
 libjabbah_la_CFLAGS  = $(EXPAT_CFLAGS)
 libjabbah_la_LDFLAGS = $(EXPAT_LIBS) 
 
-# libjabbah_a_LIBADD   = pthread.lo expat.lo
+libjabbah_la_LIBADD  = -lexpat -lpthread  
 
 

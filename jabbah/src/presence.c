@@ -5,24 +5,20 @@
 #include "presence.h"
 
 
-#define CALL_HANDLER(h,x) (((void (*)(jabbah_presence_t *))h)(x))
+#define CALL_HANDLER(h,x,y) (((void (*)(jabbah_context_t * , jabbah_presence_t *))h)(x,y))
                            
-static void *callback = NULL;
-static int   priority = -1;
-
 
 void
-presence_init(int prio)
+presence_init(jabbah_context_t *cnx, int prio)
 {
-        if (prio > -1)
-                priority = prio;
+        cnx->prio = prio;
 }
 
 
 void                      
-presence_register_callback(void (*cb)(jabbah_presence_t *))
+presence_register_callback(jabbah_context_t *cnx, void (*cb)(jabbah_context_t * , jabbah_presence_t *))
 {
-		callback = cb;
+		cnx->presence_cb = cb;
 }
 
 
@@ -88,88 +84,88 @@ presence_create_node(jabbah_presence_t *presence)
 
 
 void                      
-presence_set_state(jabbah_state_t state)
+presence_set_state(jabbah_context_t *cnx, jabbah_state_t state)
 {
         jabbah_presence_t p;
         
         p.jid    = NULL;
         p.status = NULL;
-        p.priority = priority;
+        p.priority = cnx->prio;
         p.state  = state;
         
-        presence_set(&p);
+        presence_set(cnx, &p);
 }
 
 
 void                      
-presence_set_status(jabbah_state_t state, char *status)
+presence_set_status(jabbah_context_t *cnx, jabbah_state_t state, char *status)
 {
         jabbah_presence_t p;
         
         p.jid    = NULL;
         p.status = status;
-        p.priority = priority;
+        p.priority = cnx->prio;
         p.state  = state;
         
-        presence_set(&p);
+        presence_set(cnx, &p);
         
 }
 
 void 
-presence_set(jabbah_presence_t *presence)
+presence_set(jabbah_context_t *cnx, jabbah_presence_t *presence)
 {
         jabbah_node_t *pres_node = presence_create_node(presence);
 
         // TODO: Tutaj powinno nastapic wyslanie
-        node_print(pres_node);
+        node_print(cnx, pres_node);
         
         node_free(pres_node);
 }
 
 
 void                      
-presence_parse_node(jabbah_node_t *node)
+presence_parse_node(jabbah_context_t *cnx, jabbah_node_t *node)
 {
-			 jabbah_presence_t pres;
-       jabbah_attr_list_t  *attr = NULL;
-       jabbah_node_t       *snode = NULL;
-       int                              i = 0;
+        jabbah_presence_t pres;
+        jabbah_attr_list_t  *attr = NULL;
+        jabbah_node_t       *snode = NULL;
+        int                              i = 0;
+        
+        if (cnx->presence_cb == NULL) return;
 
-				if (callback == NULL) return;
-
-			 attr = node->attributes;
+        attr = node->attributes;
        
-       pres.jid       = NULL;
-       pres.state   = STATE_ONLINE;
-       pres.status = NULL;
+        pres.jid       = NULL;
+        pres.state   = STATE_ONLINE;
+        pres.status = NULL;
 
-       while(attr != NULL) {
-               if (!strcmp("from", attr->name))
-                       pres.jid = attr->value;
-               else if (!strcmp("type", attr->name) 
-                        && !strcmp("unavailable", attr->value))
-                       pres.state = STATE_OFFLINE;
-               
-               attr = attr->next;        
-       }
-       
-       snode = node->subnodes;
-
-       while(snode != NULL) {
-               if (!strcmp("show", snode->name)) {
-                       if (!strcmp("away", snode->value))
-                               pres.state = STATE_AWAY;
-                       else if (!strcmp("xa", snode->value))
-                               pres.state = STATE_XA;
-                       else if (!strcmp("dnd", snode->value))
-                               pres.state = STATE_DND;
-                       else if (!strcmp("chat", snode->value))
-                               pres.state = STATE_CHAT;
-               } else if (!strcmp("status", snode->name)) {
-                       pres.status = snode->value;
-               }
-               snode = snode->next;
-       }
-      
-      CALL_HANDLER(callback, &pres);       
+        while(attr != NULL) {
+                if (!strcmp("from", attr->name))
+                        pres.jid = attr->value;
+                else if (!strcmp("type", attr->name) 
+                         && !strcmp("unavailable", attr->value))
+                        pres.state = STATE_OFFLINE;
+                
+                attr = attr->next;        
+        }
+        
+        snode = node->subnodes;
+        
+        while(snode != NULL) {
+                if (!strcmp("show", snode->name)) {
+                        if (!strcmp("away", snode->value))
+                                pres.state = STATE_AWAY;
+                        else if (!strcmp("xa", snode->value))
+                                pres.state = STATE_XA;
+                        else if (!strcmp("dnd", snode->value))
+                                pres.state = STATE_DND;
+                        else if (!strcmp("chat", snode->value))
+                                pres.state = STATE_CHAT;
+                } else if (!strcmp("status", snode->name)) {
+                        pres.status = snode->value;
+                }
+                snode = snode->next;
+        }
+        
+        CALL_HANDLER(cnx->presence_cb, cnx, &pres);       
 }

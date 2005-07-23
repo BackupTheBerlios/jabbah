@@ -4,20 +4,19 @@
 #include "node.h"
 #include "message.h"
 
-#define CALL_HANDLER(h,x) (((void (*)(jabbah_message_t *))h)(x))
+#define CALL_HANDLER(h,x,y) (((void (*)(jabbah_context_t * , jabbah_message_t *))h)(x, y))
 
                            
-static void *callback = NULL;
 
 void
-message_register_callback(void (*cb)(jabbah_message_t *))
+message_register_callback(jabbah_context_t *cnx, void (*cb)(jabbah_context_t * , jabbah_message_t *))
 {
-        callback = cb;
+        cnx->message_cb = cb;
 }
 
 
 jabbah_node_t * 
-message_create_node(jabbah_message_t *msg)
+message_create_node(jabbah_context_t *cnx, jabbah_message_t *msg)
 {
         jabbah_node_t *msg_node  = NULL;
         jabbah_node_t *subject   = NULL;
@@ -65,57 +64,57 @@ message_create_node(jabbah_message_t *msg)
 
 
 void                      
-message_send(jabbah_message_t *msg)
+message_send(jabbah_context_t *cnx, jabbah_message_t *msg)
 {
-     jabbah_node_t *msg_node = message_create_node(msg);
+     jabbah_node_t *msg_node = message_create_node(cnx, msg);
      
      // TODO: To zmienic na funkcje, ktora to popchnie w strumien wyjsciowy      
-     node_print(msg_node);
+     node_print(cnx, msg_node);
 
      node_free(msg_node);
 }
 
 
 void
-message_send_normal(char *jid, char *subject, char *msg)
+message_send_normal(jabbah_context_t *cnx, char *jid, char *subject, char *msg)
 {
-				jabbah_message_t m;
-
-				m.to = jid;
+        jabbah_message_t m;
+        
+        m.to = jid;
         m.type = MSG_NORMAL;
         m.from = NULL;
-				m.subject = subject;
-				m.body = msg;        
+        m.subject = subject;
+        m.body = msg;        
         m.message_node = NULL;
 
-        message_send(&m);
+        message_send(cnx, &m);
 }
 
 
 void
-message_send_chat(char *jid, char *msg)
+message_send_chat(jabbah_context_t *cnx, char *jid, char *msg)
 {
-				jabbah_message_t m;
+        jabbah_message_t m;
 
         m.to = jid;
         m.type = MSG_CHAT;
         m.from = NULL;
-				m.subject = NULL;
-				m.body = msg;
+        m.subject = NULL;
+        m.body = msg;
         m.message_node = NULL;
 
-        message_send(&m);
+        message_send(cnx, &m);
 }
 
 
 void
-message_parse_node(jabbah_node_t *node)
+message_parse_node(jabbah_context_t *cnx, jabbah_node_t *node)
 {
         jabbah_message_t    msg;
         jabbah_attr_list_t *attr = NULL;
         jabbah_node_t      *snode = NULL;
 
-        if (callback == NULL)
+        if (cnx->message_cb == NULL)
                 return;
         
         attr = node->attributes;
@@ -154,8 +153,8 @@ message_parse_node(jabbah_node_t *node)
                 snode = snode->next;
         }
 
-				msg.message_node = node;
+        msg.message_node = node;
 
-        CALL_HANDLER(callback, &msg);
+        CALL_HANDLER(cnx->message_cb, cnx, &msg);
 }
         

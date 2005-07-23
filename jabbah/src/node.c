@@ -9,24 +9,7 @@
 #include "node.h"
 
 // Macro for simplified running callbacks
-#define CALL_HANDLER(h,x) (((void (*)(jabbah_node_t *))h)(x))
-
-// Additional structure for callback registration
-typedef struct _node_callback_t {
-        char *node_name;
-        void *callback;
-        struct _node_callback_t *next;
-} node_callback_t;
-
-// Local variables
-static jabbah_node_t   *curr_node = NULL;
-static node_callback_t *callbacks = NULL;
-
-static char               *env_lang   = NULL;
-static char               *env_loc_ns = NULL;
-static jabbah_namespace_t *env_ns     = NULL;
-static int                 env_sock   = -1;
-static char               *post_lang  = NULL;
+#define CALL_HANDLER(h,x,y) (((void (*)(jabbah_context_t * , jabbah_node_t *))h)(x,y))
 
 //
 // LOCAL FUNCTION BLOCK
@@ -207,14 +190,14 @@ free_attributes(jabbah_attr_list_t *attrs)
 }
 
 static int
-check_callback(char *name)
+check_callback(jabbah_context_t *cnx, char *name)
 {
         node_callback_t *cb_node = NULL;
         
-        if (callbacks == NULL)
+        if (cnx->callbacks == NULL)
                 return 0;
 
-        cb_node = callbacks;
+        cb_node = cnx->callbacks;
 
         while (cb_node != NULL) {
                 if (!strcmp(cb_node->node_name, name))
@@ -228,10 +211,10 @@ check_callback(char *name)
 
 
 static void
-add_callback(char *name, void *cb)
+add_callback(jabbah_context_t *cnx, char *name, void *cb)
 {
         node_callback_t *cb_node = (node_callback_t *)malloc(sizeof(node_callback_t));
-        node_callback_t *cbs = callbacks;
+        node_callback_t *cbs = cnx->callbacks;
         
         cb_node->next = NULL;
 
@@ -243,7 +226,7 @@ add_callback(char *name, void *cb)
         // adding pointer to function
         cb_node->callback = cb;
 
-        if (callbacks ==  NULL) callbacks = cb_node;
+        if (cnx->callbacks ==  NULL) cnx->callbacks = cb_node;
         else {
                 while (cbs->next != NULL) cbs = cbs->next;
                 cbs->next = cb_node;
@@ -267,13 +250,13 @@ del_callback_node(node_callback_t *node)
 
 
 static void
-del_callback(char *name)
+del_callback(jabbah_context_t *cnx, char *name)
 {
-        node_callback_t *prev = callbacks;
-        node_callback_t *curr = callbacks;
+        node_callback_t *prev = cnx->callbacks;
+        node_callback_t *curr = cnx->callbacks;
 
-        if (!strcmp(callbacks->node_name, name)) {
-                callbacks = callbacks->next;
+        if (!strcmp(cnx->callbacks->node_name, name)) {
+                cnx->callbacks = cnx->callbacks->next;
                 del_callback_node(curr);
         }
 
@@ -291,15 +274,15 @@ del_callback(char *name)
 
 
 static void
-run_callback(jabbah_node_t *node)
+run_callback(jabbah_context_t *cnx, jabbah_node_t *node)
 {
-        node_callback_t *cb = callbacks;
+        node_callback_t *cb = cnx->callbacks;
 
-        node_print2(node);
+//        node_print2(node);
         
         while (cb != NULL) {
                 if (!strcmp(cb->node_name, node->name)) {
-                        CALL_HANDLER(cb->callback, node);
+                        CALL_HANDLER(cb->callback, cnx, node);
                         return;
                 }
                 cb = cb->next;
@@ -310,68 +293,51 @@ run_callback(jabbah_node_t *node)
 //
 // INTERFACE FUNCTIONS
 //
-void
-node_set_env(int socket, char *lang, char *node_ns, jabbah_namespace_t *ns)
-{
-        env_sock    = socket;
-        env_lang    = lang;
-        env_ns      = ns;
-        env_loc_ns = node_ns;
-}
 
 //
 // CALLBACKS
 //
 int
-node_callback_register(char *node_name, void (*cb)(jabbah_node_t *node))
+node_callback_register(jabbah_context_t *cnx, char *node_name, void (*cb)(jabbah_context_t * , jabbah_node_t *))
 {
         if (node_name == NULL || cb == NULL)
                 return -1;
 
-        if (check_callback(node_name))
+        if (check_callback(cnx, node_name))
                 return -2;
 
-        add_callback(node_name, (void *)cb);
+        add_callback(cnx, node_name, (void *)cb);
 
         return 0;
 }
         
 int
-node_callback_unregister(char *node_name)
+node_callback_unregister(jabbah_context_t *cnx, char *node_name)
 {
         if (node_name == NULL)
                 return -1;
 
-        if (!check_callback(node_name))
+        if (!check_callback(cnx, node_name))
                 return -2;
 
-        del_callback(node_name);
+        del_callback(cnx, node_name);
 
         return 0;
 }
 
 
-
 void
-node_callback_flush(void)
+node_callback_flush(jabbah_context_t *cnx)
 {
-        node_callback_t *cb = callbacks;
+        node_callback_t *cb = cnx->callbacks;
 
         while (cb != NULL) {
-                cb = callbacks->next;
-                del_callback_node(callbacks);
-                callbacks = cb;
+                cb = cnx->callbacks->next;
+                del_callback_node(cnx->callbacks);
+                cnx->callbacks = cb;
         }
 
-        callbacks = NULL;
-}
-
-
-void
-node_free_resources()
-{
-        node_free(curr_node);
-        node_callback_flush();
+        cnx->callbacks = NULL;
 }
 
 
@@ -380,7 +346,7 @@ node_free_resources()
 //
 
 jabbah_node_t *
-node_create(const char *name, const char **attr)
+node_create(jabbah_context_t *cnx, const char *name, const char **attr)
 {
         jabbah_node_t      *node        = NULL;
         char               *node_lang   = NULL;
@@ -392,20 +358,20 @@ node_create(const char *name, const char **attr)
         int                 i;
 
         // Take some info from parent
-        if (curr_node != NULL) {
-                if (curr_node->lang != NULL) {
-                        node_lang = (char *)malloc(sizeof(char)*(strlen(curr_node->lang)+1));
-                        strncpy(node_lang, curr_node->lang, strlen(curr_node->lang));
-                        node_lang[strlen(curr_node->lang)] = '\0';
+        if (cnx->curr_node != NULL) {
+                if (cnx->curr_node->lang != NULL) {
+                        node_lang = (char *)malloc(sizeof(char)*(strlen(cnx->curr_node->lang)+1));
+                        strncpy(node_lang, cnx->curr_node->lang, strlen(cnx->curr_node->lang));
+                        node_lang[strlen(cnx->curr_node->lang)] = '\0';
                 }
-                node_reg_ns = node_namespace_copy(curr_node->registered_ns);
+                node_reg_ns = node_namespace_copy(cnx->curr_node->registered_ns);
         } else {
-                if (env_lang != NULL) {
-                        node_lang = (char *)malloc(sizeof(char)*(strlen(env_lang)+1));
-                        strncpy(node_lang, env_lang, strlen(env_lang));
-                        node_lang[strlen(env_lang)] = '\0';
+                if (cnx->lang != NULL) {
+                        node_lang = (char *)malloc(sizeof(char)*(strlen(cnx->lang)+1));
+                        strncpy(node_lang, cnx->lang, strlen(cnx->lang));
+                        node_lang[strlen(cnx->lang)] = '\0';
                 }
-                node_reg_ns = node_namespace_copy(env_ns);
+                node_reg_ns = node_namespace_copy(cnx->ns);
         }
 
         // Update language (if changed) and namespace (if needed)
@@ -415,8 +381,11 @@ node_create(const char *name, const char **attr)
                         node_lang = (char *)malloc(sizeof(char)*(strlen(attr[i+1])+1));
                         strncpy(node_lang, attr[i+1], strlen(attr[i+1]));
                         node_lang[strlen(attr[i+1])] = '\0';
-                } else if (!strcmp("xmlns", attr[i]))
-                        node_ns = (char *)attr[i+1];
+                } else if (!strcmp("xmlns", attr[i])) {
+                        node_ns = (char *)malloc(sizeof(char)*(strlen(attr[i+1])+1));
+                        strncpy(node_ns, attr[i+1], strlen(attr[i+1]));
+                        node_ns[strlen(attr[i+1])] = '\0';
+                }
         }
 
         // Now update info about registered namespaces
@@ -446,10 +415,10 @@ node_create(const char *name, const char **attr)
         }
 
         // At last, if other methods fail, get the stream namespace
-        if (node_ns == NULL && env_loc_ns != NULL) {
-                node_ns = (char *)malloc(sizeof(char)*strlen(env_loc_ns));
-                strncpy(node_ns, env_loc_ns, strlen(env_loc_ns));
-                node_ns[strlen(env_loc_ns)] = '\0';
+        if (node_ns == NULL && cnx->node_ns != NULL) {
+                node_ns = (char *)malloc(sizeof(char)*strlen(cnx->node_ns));
+                strncpy(node_ns, cnx->node_ns, strlen(cnx->node_ns));
+                node_ns[strlen(cnx->node_ns)] = '\0';
         }
 
         node = node_full_init(node_name, node_reg_ns, node_ns, node_lang);
@@ -457,8 +426,8 @@ node_create(const char *name, const char **attr)
        
         node = get_attributes(node, attr);
 
-        curr_node = node_subnode_add(curr_node, node);                        
-        curr_node = node;
+        cnx->curr_node = node_subnode_add(cnx->curr_node, node);                        
+        cnx->curr_node = node;
 
         if (node_lang != NULL)
                 free(node_lang);
@@ -475,71 +444,55 @@ node_create(const char *name, const char **attr)
 
 
 jabbah_node_t *
-node_append_value(const char *value, int len)
+node_append_value(jabbah_context_t *cnx, const char *value, int len)
 {
         char *val = (char *)malloc(sizeof(char)*(len+1));
 
         strncpy(val, value, len);
         val[len] = '\0';
-        curr_node = node_value_append(curr_node, val);
+        cnx->curr_node = node_value_append(cnx->curr_node, val);
         free(val);
 
-        return curr_node;
+        return cnx->curr_node;
 }
 
 
 
 jabbah_node_t *
-node_close(const char *name)
+node_close(jabbah_context_t *cnx, const char *name)
 {
         jabbah_node_t *n = NULL;
         
-        if (curr_node->parent != NULL) {
-                curr_node = curr_node->parent;
+        if (cnx->curr_node->parent != NULL) {
+                cnx->curr_node = cnx->curr_node->parent;
         } else {
-                run_callback(curr_node);
-                node_free(curr_node);
-                curr_node = NULL;
+                run_callback(cnx, cnx->curr_node);
+                node_free(cnx->curr_node);
+                cnx->curr_node = NULL;
         }
 
-        return curr_node;
+        return cnx->curr_node;
 }
 
 
 void
-node_print(jabbah_node_t *node)
+node_print(jabbah_context_t *cnx, jabbah_node_t *node)
 {
         char *nodeBuff;
 
-        if (node == NULL || env_sock < 0)
+        if (node == NULL || cnx->sock < 0)
                 return;
         
-        printf("NODE: %s\n", node->name);
-        nodeBuff = node_to_string(node);
-        write(env_sock, nodeBuff, strlen(nodeBuff));
-        printf("%s\n\n", nodeBuff);
-        free(nodeBuff);
-}
-
-void
-node_print2(jabbah_node_t *node)
-{
-        char *nodeBuff;
-
-        if (node == NULL || env_sock < 0)
-                return;
-        
-        printf("NODE: %s\n", node->name);
-        nodeBuff = node_to_string(node);
-        printf("%s\n\n", nodeBuff);
+        nodeBuff = node_to_string(cnx, node);
+        write(cnx->sock, nodeBuff, strlen(nodeBuff));
         free(nodeBuff);
 }
 
 
 char *
-node_to_string(jabbah_node_t *node)
+node_to_string(jabbah_context_t *cnx, jabbah_node_t *node)
 {
-        return node_to_string_ex(node, post_lang, "jabber:client");
+        return node_to_string_ex(node, cnx->post_lang, "jabber:client");
 }
 
 char *

@@ -6,53 +6,35 @@
 #include "sha1.h"
 #include "auth.h"
 
-#define CALL_HANDLER(h,x) (((void (*)(jabbah_auth_result_t *))h)(x))
+#define CALL_HANDLER(h,x,y) (((void (*)(jabbah_context_t * , jabbah_auth_result_t *))h)(x, y))
 
-typedef enum {
-        AUTH_NONE,
-        AUTH_GET_TYPE,
-        AUTH_GOT_TYPE,
-        AUTH_SENT_PASS,
-        AUTH_GOT_RESULT
-} auth_t;
-
-
-// Local variables
-static char   *server_id     = NULL;
-
-static char   *auth_login    = NULL;
-static char   *auth_pass     = NULL;
-static char   *auth_resource = NULL;
-static void   *auth_callback = NULL;
-static auth_t  auth_state    = AUTH_NONE;
 
 static void
-auth_send_type_req()
+auth_send_type_req(jabbah_context_t *cnx)
 {
         jabbah_node_t *user  = NULL;
 
-        auth_state = AUTH_GET_TYPE;
         user = node_init("username");
-        user = node_value_set(user, auth_login);
+        user = node_value_set(user, cnx->login);
         
-        iq_send_query(IQ_GET, "jabber:iq:auth", user, auth_manage_type_response);
+        iq_send_query(cnx, IQ_GET, "jabber:iq:auth", user, auth_manage_type_response);
 }
 
 
 
 static char *
-digets_pass()
+digets_pass(jabbah_context_t *cnx, char *auth_pass)
 {
 
-        char       *pass_string = (char *)malloc(sizeof(char)*(strlen(server_id)+strlen(auth_pass)+1));
+        char       *pass_string = (char *)malloc(sizeof(char)*(strlen(cnx->session_id)+strlen(auth_pass)+1));
         SHA1Context con;
         uint8_t     result[SHA1HashSize];
         char       *hash = (char *)malloc(sizeof(char)*(2*SHA1HashSize+1));
         int         i = 0;
         
-        strncpy(pass_string, server_id, strlen(server_id));
-        pass_string[strlen(server_id)] = '\0';
-        strncat(pass_string, auth_pass, strlen(server_id) + strlen(auth_pass));
+        strncpy(pass_string, cnx->session_id, strlen(cnx->session_id));
+        pass_string[strlen(cnx->session_id)] = '\0';
+        strncat(pass_string, cnx->passwd, strlen(cnx->session_id) + strlen(cnx->passwd));
         
         SHA1Reset(&con);
         SHA1Input(&con,  (const uint8_t *)pass_string, strlen(pass_string));
@@ -69,73 +51,64 @@ digets_pass()
 
 
 static void
-auth_send_passwd(int resource)
+auth_send_passwd(jabbah_context_t *cnx)
 {
         jabbah_node_t *req     = NULL;
         jabbah_node_t *passwd  = NULL;
         jabbah_node_t *res     = NULL;
 
         req = node_init("username");
-        req = node_value_set(req, auth_login);
+        req = node_value_set(req, cnx->login);
 
         passwd = node_init("password");
-        passwd = node_value_set(passwd, auth_pass);
+        passwd = node_value_set(passwd, cnx->passwd);
         req->next = passwd;
 
-        if (resource) {
+        if (cnx->resource) {
                 res = node_init("resource");
-                res = node_value_set(res, auth_resource);
+                res = node_value_set(res, cnx->resource);
                 passwd->next = res;
         }
 
-        iq_send_query(IQ_SET, "jabber:iq:auth", req, auth_manage_auth_response);
+        iq_send_query(cnx, IQ_SET, "jabber:iq:auth", req, auth_manage_auth_response);
                 
 }
 
 
 
 static void
-auth_send_digets_passwd(int resource)
+auth_send_digets_passwd(jabbah_context_t *cnx)
 {
         jabbah_node_t *req     = NULL;
         jabbah_node_t *passwd  = NULL;
         jabbah_node_t *res     = NULL;
-        char          *digets  = digets_pass();
+        char          *digets  = digets_pass(cnx, cnx->passwd);
 
         req = node_init("username");
-        req = node_value_set(req, auth_login);
+        req = node_value_set(req, cnx->login);
 
         passwd = node_init("digest");
         passwd = node_value_set(passwd, digets);
         req->next = passwd;
 
-        if (resource) {
+        if (cnx->resource) {
                 res = node_init("resource");
-                res = node_value_set(res, auth_resource);
+                res = node_value_set(res, cnx->resource);
                 passwd->next = res;
         }
 
         free(digets);
         
-        iq_send_query(IQ_SET, "jabber:iq:auth", req, auth_manage_auth_response);
+        iq_send_query(cnx, IQ_SET, "jabber:iq:auth", req, auth_manage_auth_response);
 }
 
 
-
 void
-auth_init(char *id)
-{
-        server_id = id;
-}
-
-void
-auth_manage_auth_response(jabbah_node_t *node)
+auth_manage_auth_response(jabbah_context_t *cnx, jabbah_node_t *node)
 {
         jabbah_attr_list_t   *attr = NULL;
         jabbah_attr_list_t   *error = NULL;
         jabbah_auth_result_t  result;
-
-        auth_state = AUTH_GOT_RESULT;
 
         attr = node->attributes;
         
@@ -145,14 +118,14 @@ auth_manage_auth_response(jabbah_node_t *node)
                 result.code    = 500;
                 result.message = "User authorized"; 
 
-                CALL_HANDLER(auth_callback, &result);
+                CALL_HANDLER(cnx->auth_cb, cnx, &result);
 
         } else {
                 if (attr == NULL) {
                         result.code = 403;
                         result.message = "Server internal error";
 
-                        CALL_HANDLER(auth_callback, &result);
+                        CALL_HANDLER(cnx->auth_cb, cnx, &result);
                 } else {
                         if (!strcmp(attr->value, "error") &&
                             !strcmp(node->subnodes->name, "error")) {
@@ -186,16 +159,14 @@ auth_manage_auth_response(jabbah_node_t *node)
                                 result.message = "Server internal error";
                         }
 
-                        CALL_HANDLER(auth_callback, &result);                        
+                        CALL_HANDLER(cnx->auth_cb, cnx, &result);                        
                                 
                 }
         }
-
-        auth_free_resources();
 }
 
 void
-auth_manage_type_response(jabbah_node_t *node)
+auth_manage_type_response(jabbah_context_t *cnx, jabbah_node_t *node)
 {
         jabbah_attr_list_t *attr = node->attributes;
         jabbah_auth_result_t result;
@@ -205,18 +176,15 @@ auth_manage_type_response(jabbah_node_t *node)
         int           digets   = 0;
         int           resource = 0;
 
-        auth_state = AUTH_GOT_TYPE;
-
         
         // First of all, find if the response is clear
         while (attr != NULL && strcmp(attr->name, "type")) attr = attr->next;
 
         if (attr == NULL || strcmp(attr->value, "result")) {
-                auth_free_resources();
                 result.code = 404;
                 result.message = "Authorization of jabber:iq:auth unsupported by this server";
 
-                CALL_HANDLER(auth_callback, &result);
+                CALL_HANDLER(cnx->auth_cb, cnx, &result);
                 
                 return;
         }
@@ -228,11 +196,10 @@ auth_manage_type_response(jabbah_node_t *node)
         while (query != NULL && strcmp(query->name, "query")) query = query->next;
 
         if (query == NULL) {
-                auth_free_resources();
                 result.code = 404;
                 result.message = "Authorization of jabber:iq:auth unsupported by this server";
 
-                CALL_HANDLER(auth_callback, &result);
+                CALL_HANDLER(cnx->auth_cb, cnx, &result);
                 
                 return;
         }
@@ -252,59 +219,40 @@ auth_manage_type_response(jabbah_node_t *node)
                 el = el->next;
         }
 
-        auth_state = AUTH_SENT_PASS;
         if (digets) {
-                auth_send_digets_passwd(resource);
+                auth_send_digets_passwd(cnx);
         } else if (pass) {
-                auth_send_passwd(resource);
+                auth_send_passwd(cnx);
         } else {
-                auth_free_resources();
                 result.code = 404;
                 result.message = "Authorization of jabber:iq:auth unsupported by this server";
 
-                CALL_HANDLER(auth_callback, &result);
+                CALL_HANDLER(cnx->auth_cb, cnx, &result);
         }
         
 }
 
 int
-auth_register(char *login, char *pass, char *resource, void (*cb)(jabbah_auth_result_t *))
+auth_register(jabbah_context_t *cnx, char *login, char *pass, char *resource, void (*cb)(jabbah_context_t *, jabbah_auth_result_t *))
 {
-        if (auth_state != AUTH_NONE)
-                return -1;
 
-        auth_login    = (char *)malloc(sizeof(char)*(strlen(login)+1));
-        strncpy(auth_login, login, strlen(login));
-        auth_login[strlen(login)] = '\0';
+        cnx->login    = (char *)malloc(sizeof(char)*(strlen(login)+1));
+        strncpy(cnx->login, login, strlen(login));
+        cnx->login[strlen(login)] = '\0';
         
-        auth_pass     = (char *)malloc(sizeof(char)*(strlen(pass)+1));
-        strncpy(auth_pass, pass, strlen(pass));
-        auth_pass[strlen(pass)] = '\0';
+        cnx->passwd   = (char *)malloc(sizeof(char)*(strlen(pass)+1));
+        strncpy(cnx->passwd, pass, strlen(pass));
+        cnx->passwd[strlen(pass)] = '\0';
         
-        auth_resource = (char *)malloc(sizeof(char)*(strlen(resource)+1));
-        strncpy(auth_resource, resource, strlen(resource));
-        auth_resource[strlen(resource)] = '\0';
+        cnx->resource = (char *)malloc(sizeof(char)*(strlen(resource)+1));
+        strncpy(cnx->resource, resource, strlen(resource));
+        cnx->resource[strlen(resource)] = '\0';
 
-        auth_callback = cb;
+        cnx->auth_cb = cb;
 
-        auth_send_type_req();
+        auth_send_type_req(cnx);
 
         return 0;
 }
 
 
-void
-auth_free_resources()
-{
-        if (auth_login != NULL)
-                free(auth_login);
-        
-        if (auth_pass != NULL)
-                free(auth_pass);
-
-        if (auth_resource != NULL)
-                free(auth_resource);
-
-        auth_callback = NULL;
-        auth_state = AUTH_NONE;
-}
