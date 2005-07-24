@@ -33,7 +33,7 @@ iq_send_response(jabbah_context_t *cnx, char *to, char *id, char *xmlns, jabbah_
         node  = node_subnode_add(node, query);
         
         node_print(cnx, node);
-        printf("send version\n");
+
         pthread_mutex_unlock(&(cnx->iq_mutex));
 }
 

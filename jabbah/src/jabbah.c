@@ -16,6 +16,7 @@
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -394,9 +395,6 @@ jabbah_connect(jabbah_context_t *cnx, char *login, char *passwd, char *resource,
 
         // Wait until session will be opened
         while (!(cnx->opened_session)) sleep(1);
-
-        //DEBUG MSG
-        printf("Session opened! Lang: %s ID: %s\n", cnx->lang, cnx->session_id);
 
         // Now try to authorize
         auth_register(cnx, login, passwd, resource, authorize);

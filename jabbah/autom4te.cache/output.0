@@ -19049,7 +19049,6 @@ LIBTOOL='$(SHELL) $(top_builddir)/libtool'
        
 
 
-
 echo "$as_me:$LINENO: checking for library containing socket" >&5
 echo $ECHO_N "checking for library containing socket... $ECHO_C" >&6
 if test "${ac_cv_search_socket+set}" = set; then
@@ -19302,7 +19301,8 @@ fi
 
 
 
-for ac_header in pthread.h expat.h
+
+for ac_header in pthread.h expat.h netinet/in.h
 do
 as_ac_Header=`echo "ac_cv_header_$ac_header" | $as_tr_sh`
 if eval "test \"\${$as_ac_Header+set}\" = set"; then
@@ -19449,7 +19449,6 @@ _ACEOF
 fi
 
 done
-
 
 
 

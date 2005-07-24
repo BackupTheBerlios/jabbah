@@ -1,3 +1,6 @@
+2005-07-24 02:16 Bazyli Zygan <bazyli@gmail.com>
+	* Added headers for Mac OS X compilation
+	
 2005-07-24 00:40 Bazyli Zygan <bazyli@gmail.com>
 	* Refactored code for context handling
 	* Added jabber:iq:version handling
