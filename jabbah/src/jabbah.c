@@ -118,8 +118,10 @@ parseIt(jabbah_context_t *cnx)
   XML_SetUserData(cnx->p, cnx);
   XML_SetElementHandler(cnx->p, start, end);
   XML_SetCharacterDataHandler(cnx->p, data);
-  
-  for (;;) {
+
+  pthread_mutex_lock(&(cnx->con_mutex));
+  while (cnx->continue_parse == 1) {
+    pthread_mutex_unlock(&(cnx->con_mutex));      
     if (cnx->opened_session == -1) break;
     
     len = recv(cnx->sock, &(cnx->buff), 1, 0);
@@ -139,15 +141,14 @@ parseIt(jabbah_context_t *cnx)
             cnx->sock = -1;
             return;
     }
-
+    pthread_mutex_lock(&(cnx->con_mutex));      
 //    if (done)
 //      break;
   }
   // Free resources
-
+  pthread_mutex_unlock(&(cnx->con_mutex));      
   close(cnx->sock);
   cnx->sock = -1;
-
 }
 
 void *
@@ -160,27 +161,9 @@ parsing_thread(void *p)
         node_callback_register(cnx, "presence", presence_parse_node);
         node_callback_register(cnx, "iq", iq_parse_node);
 
-//        iq_init("jabber:client", cnx->server_address);
         
         parseIt(cnx);
-
-        // Flushing everything
-//        iq_free_resources();
-//        node_callback_flush();
-
-//        if (ns != NULL) {
-//                node_namespace_free(ns);
-//                ns = NULL;
-//        }
-        
-//        if (lang != NULL) {
-//                free(lang);
-//                lang = NULL;
-//        }
-//        if (node_ns != NULL) {
-//                free(node_ns);
-//               node_ns = NULL;
-//               } 
+        pthread_exit(NULL);
 }
 
 
@@ -212,6 +195,7 @@ jabbah_context_create(char *server_addr, int server_port, int ssl)
 
         cnx->p = XML_ParserCreate(NULL);
 
+        cnx->continue_parse = 1;
         cnx->authorization = 0;
         cnx->opened_session = 0;
         cnx->session_id = NULL;
@@ -235,6 +219,7 @@ jabbah_context_create(char *server_addr, int server_port, int ssl)
 
         pthread_mutex_init(&(cnx->parse_mutex), NULL);
         pthread_mutex_init(&(cnx->iq_mutex), NULL);
+        pthread_mutex_init(&(cnx->con_mutex), NULL);
 
         //
         // Node part
@@ -323,6 +308,7 @@ jabbah_context_destroy(jabbah_context_t *cnx)
 
         pthread_mutex_destroy(&(cnx->parse_mutex));
         pthread_mutex_destroy(&(cnx->iq_mutex));
+        pthread_mutex_destroy(&(cnx->con_mutex));
 
         free(cnx);
 }
@@ -415,10 +401,10 @@ jabbah_close(jabbah_context_t *cnx, char *desc) {
 
         presence_set_status(cnx, STATE_OFFLINE, desc);
 
-        pthread_mutex_lock(&(cnx->parse_mutex));
-        pthread_cancel(cnx->parse_thread);
-        pthread_join(cnx->parse_thread, NULL);
-        pthread_mutex_unlock(&(cnx->parse_mutex));
+        pthread_mutex_lock(&(cnx->con_mutex));
+        cnx->continue_parse = 0;
+        pthread_mutex_unlock(&(cnx->con_mutex));
+//        pthread_join(cnx->parse_thread, NULL);
 }
 
 

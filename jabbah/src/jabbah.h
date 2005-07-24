@@ -110,7 +110,9 @@ typedef struct _jabbah_context_t {
         char                buff;
         int                 sock;
       //SSL_CTX            *ssl_ctx = NULL;
+        int                 continue_parse;
         pthread_t           parse_thread;
+        pthread_mutex_t     con_mutex;
         pthread_mutex_t     parse_mutex;
         pthread_mutex_t     iq_mutex;
         int                 authorization;
