@@ -147,8 +147,7 @@ parseIt(jabbah_context_t *cnx)
   }
   // Free resources
   pthread_mutex_unlock(&(cnx->con_mutex));      
-  close(cnx->sock);
-  cnx->sock = -1;
+
 }
 
 void *
@@ -218,6 +217,7 @@ jabbah_context_create(char *server_addr, int server_port, int ssl)
         cnx->ssl = ssl;
 
         pthread_mutex_init(&(cnx->parse_mutex), NULL);
+        pthread_mutex_init(&(cnx->write_mutex), NULL);
         pthread_mutex_init(&(cnx->iq_mutex), NULL);
         pthread_mutex_init(&(cnx->con_mutex), NULL);
 
@@ -307,6 +307,7 @@ jabbah_context_destroy(jabbah_context_t *cnx)
         }
 
         pthread_mutex_destroy(&(cnx->parse_mutex));
+        pthread_mutex_destroy(&(cnx->write_mutex));
         pthread_mutex_destroy(&(cnx->iq_mutex));
         pthread_mutex_destroy(&(cnx->con_mutex));
 
@@ -404,7 +405,52 @@ jabbah_close(jabbah_context_t *cnx, char *desc) {
         pthread_mutex_lock(&(cnx->con_mutex));
         cnx->continue_parse = 0;
         pthread_mutex_unlock(&(cnx->con_mutex));
-//        pthread_join(cnx->parse_thread, NULL);
+        pthread_mutex_lock(&(cnx->write_mutex));
+        write(cnx->sock, "</stream:stream>\n", 17);
+        pthread_mutex_unlock(&(cnx->write_mutex));
+        pthread_join(cnx->parse_thread, NULL);
+        close(cnx->sock);
+        cnx->sock = -1;
+        cnx->opened_session = 0;
+        cnx->authorization = 0;
+
+        if (cnx->lang != NULL) {
+                free(cnx->lang);
+                cnx->lang = NULL;
+        }
+
+        if (cnx->node_ns != NULL) {
+                free(cnx->node_ns);
+                cnx->node_ns = NULL;
+        }
+
+        if (cnx->ns != NULL) {
+                node_namespace_free(cnx->ns);
+                cnx->ns = NULL;
+        }
+
+        if (cnx->session_id != NULL) {
+                free(cnx->session_id);
+                cnx->session_id = NULL;
+        }
+
+        if (cnx->login != NULL) {
+                free(cnx->login);
+                cnx->login = NULL;
+        }
+
+        if (cnx->passwd != NULL) {
+                free(cnx->passwd);
+                cnx->passwd = NULL;
+        }
+
+        if (cnx->resource != NULL) {
+                free(cnx->resource);
+                cnx->resource = NULL;
+        }
+
+        cnx->prio = 0;
+        
 }
 
 

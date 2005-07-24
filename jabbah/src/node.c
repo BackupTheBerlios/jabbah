@@ -484,7 +484,9 @@ node_print(jabbah_context_t *cnx, jabbah_node_t *node)
                 return;
         
         nodeBuff = node_to_string(cnx, node);
+        pthread_mutex_lock(&(cnx->write_mutex));
         write(cnx->sock, nodeBuff, strlen(nodeBuff));
+        pthread_mutex_unlock(&(cnx->write_mutex));
         free(nodeBuff);
 }
 

@@ -114,6 +114,7 @@ typedef struct _jabbah_context_t {
         pthread_t           parse_thread;
         pthread_mutex_t     con_mutex;
         pthread_mutex_t     parse_mutex;
+        pthread_mutex_t     write_mutex;
         pthread_mutex_t     iq_mutex;
         int                 authorization;
         int                 opened_session;
