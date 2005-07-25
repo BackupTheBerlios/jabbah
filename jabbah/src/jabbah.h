@@ -1,6 +1,7 @@
 #ifndef _JABBAH_H_
 #define _JABBAH_H_
 
+
 #include <pthread.h>
 #include <expat.h>
 
@@ -101,6 +102,48 @@ typedef struct _jabbah_auth_result_t {
         char *message;
 } jabbah_auth_result_t;
 
+//
+// ROSTER structures
+//
+
+typedef enum {
+        SUB_NONE,
+        SUB_TO,
+        SUB_FROM,
+        SUB_BOTH
+} jabbah_subscription_t;
+
+typedef struct _jabbah_logged_res_t {
+        char          *resource;
+        int            prio;
+        char          *status;
+        jabbah_state_t state;
+} jabbah_logged_res_t;
+
+
+typedef struct _jabbah_roster_item_t {
+        char *name;
+        char *jid;
+        int   res_count;
+        jabbah_subscription_t subscription;
+        jabbah_logged_res_t **res;
+} jabbah_roster_item_t;
+
+typedef struct _jabbah_roster_group_t {
+        char *name;
+        int   item_count;
+        jabbah_roster_item_t **items;
+} jabbah_roster_group_t;
+
+typedef struct _jabbah_roster_t {
+        jabbah_roster_item_t  **items;
+        int                     item_count;
+        jabbah_roster_group_t **groups;
+        int                     group_count;
+        jabbah_roster_item_t  **nogroups;
+        int                     nogroup_count;
+} jabbah_roster_t;
+
 
 //
 // CONTEXT structure
@@ -109,7 +152,7 @@ typedef struct _jabbah_context_t {
         XML_Parser          p;
         char                buff;
         int                 sock;
-      //SSL_CTX            *ssl_ctx = NULL;
+        //SSL_CTX            *ssl_ctx = NULL;
         int                 continue_parse;
         pthread_t           parse_thread;
         pthread_mutex_t     con_mutex;
@@ -144,7 +187,7 @@ typedef struct _jabbah_context_t {
         jabbah_req_list_t  *req_list;
         int                 req_id;
 
-        
+        jabbah_roster_t    *roster;
         
 } jabbah_context_t;
 
@@ -162,4 +205,6 @@ void               jabbah_message_register_callback(jabbah_context_t *cnx, void 
 void               jabbah_message_send_normal(jabbah_context_t *cnx, char *jid, char *subject, char *msg);
 void               jabbah_message_send_chat(jabbah_context_t *cnx, char *jid, char *msg);
 
+void               jabbah_roster_get(jabbah_context_t *cnx);
+jabbah_roster_t *  jabbah_roster_wait(jabbah_context_t *cnx);
 #endif

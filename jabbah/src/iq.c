@@ -83,7 +83,9 @@ iq_send_query(jabbah_context_t *cnx, jabbah_iq_type_t type, char *xmlns, jabbah_
         }
                         
         node = node_attribute_add(node, "id", id);
-        node = node_attribute_add(node, "to", cnx->server_address);
+        if (strcmp(xmlns, "jabber:iq:roster"))
+		node = node_attribute_add(node, "to", cnx->server_address);
+	
 
         query->namespace = (char *)malloc(sizeof(char)*(strlen(xmlns)+1));
         strncpy(query->namespace, xmlns, strlen(xmlns));

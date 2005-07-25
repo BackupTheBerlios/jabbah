@@ -18,6 +18,7 @@ jabbah_node_t * node_close(jabbah_context_t *cnx, const char *name);
 
 // Additional node operations
 void            node_print(jabbah_context_t *cnx, jabbah_node_t *node);
+void            node_print_local(jabbah_context_t *cnx, jabbah_node_t *node);
 char *          node_to_string(jabbah_context_t *cnx, jabbah_node_t *node);
 char *          node_to_string_ex(jabbah_node_t *node, char *curr_lang, char *curr_ns);
 void            node_free(jabbah_node_t *node);

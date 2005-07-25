@@ -27,10 +27,10 @@ libjabbah_la_HEADERS = jabbah.h
 libjabbah_la_SOURCES = jabbah.h jabbah.c node.h node.c namespace.c \
 			presence.h presence.c message.h message.c \
 			iq.h iq.c auth.h auth.c sha1.h sha1.c \
-			version.h version.c
+			version.h version.c roster.h roster.c
 
 libjabbah_la_CFLAGS  = $(EXPAT_CFLAGS)
-libjabbah_la_LDFLAGS = $(EXPAT_LIBS) 
+libjabbah_la_LDFLAGS = -version-info 0:1:0 $(EXPAT_LIBS) 
 
 libjabbah_la_LIBADD  = -lexpat -lpthread  
 

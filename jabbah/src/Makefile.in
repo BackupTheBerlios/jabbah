@@ -80,7 +80,7 @@ am_libjabbah_la_OBJECTS = libjabbah_la-jabbah.lo libjabbah_la-node.lo \
 	libjabbah_la-namespace.lo libjabbah_la-presence.lo \
 	libjabbah_la-message.lo libjabbah_la-iq.lo \
 	libjabbah_la-auth.lo libjabbah_la-sha1.lo \
-	libjabbah_la-version.lo
+	libjabbah_la-version.lo libjabbah_la-roster.lo
 libjabbah_la_OBJECTS = $(am_libjabbah_la_OBJECTS)
 DEFAULT_INCLUDES = -I. -I$(srcdir) -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
@@ -204,10 +204,10 @@ libjabbah_la_HEADERS = jabbah.h
 libjabbah_la_SOURCES = jabbah.h jabbah.c node.h node.c namespace.c \
 			presence.h presence.c message.h message.c \
 			iq.h iq.c auth.h auth.c sha1.h sha1.c \
-			version.h version.c
+			version.h version.c roster.h roster.c
 
 libjabbah_la_CFLAGS = $(EXPAT_CFLAGS)
-libjabbah_la_LDFLAGS = $(EXPAT_LIBS) 
+libjabbah_la_LDFLAGS = -version-info 0:1:0 $(EXPAT_LIBS) 
 libjabbah_la_LIBADD = -lexpat -lpthread  
 all: all-am
 
@@ -285,6 +285,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libjabbah_la-namespace.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libjabbah_la-node.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libjabbah_la-presence.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libjabbah_la-roster.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libjabbah_la-sha1.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libjabbah_la-version.Plo@am__quote@
 
@@ -371,6 +372,13 @@ libjabbah_la-version.lo: version.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='version.c' object='libjabbah_la-version.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libjabbah_la_CFLAGS) $(CFLAGS) -c -o libjabbah_la-version.lo `test -f 'version.c' || echo '$(srcdir)/'`version.c
+
+libjabbah_la-roster.lo: roster.c
+@am__fastdepCC_TRUE@	if $(LIBTOOL) --tag=CC --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libjabbah_la_CFLAGS) $(CFLAGS) -MT libjabbah_la-roster.lo -MD -MP -MF "$(DEPDIR)/libjabbah_la-roster.Tpo" -c -o libjabbah_la-roster.lo `test -f 'roster.c' || echo '$(srcdir)/'`roster.c; \
+@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/libjabbah_la-roster.Tpo" "$(DEPDIR)/libjabbah_la-roster.Plo"; else rm -f "$(DEPDIR)/libjabbah_la-roster.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='roster.c' object='libjabbah_la-roster.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libjabbah_la_CFLAGS) $(CFLAGS) -c -o libjabbah_la-roster.lo `test -f 'roster.c' || echo '$(srcdir)/'`roster.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

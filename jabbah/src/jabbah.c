@@ -25,6 +25,7 @@
 #include "node.h"
 #include "iq.h"
 #include "auth.h"
+#include "roster.h"
 #include "jabbah.h"
 
 #define CALL_HANDLER(h,x) (((void (*)(int *))h)(x))
@@ -200,6 +201,7 @@ jabbah_context_create(char *server_addr, int server_port, int ssl)
         cnx->session_id = NULL;
         cnx->ns = NULL;
         cnx->lang = NULL;
+        cnx->post_lang = NULL;
         cnx->node_ns = NULL;
         cnx->stream_callback = NULL;
 
@@ -240,6 +242,8 @@ jabbah_context_create(char *server_addr, int server_port, int ssl)
 
         cnx->req_id = 0;
         cnx->req_list = NULL;
+
+        cnx->roster = NULL;
         
         return cnx;
 }
@@ -305,6 +309,9 @@ jabbah_context_destroy(jabbah_context_t *cnx)
                 free(reqs);
                 reqs = reqs2;
         }
+
+        if (cnx->roster != NULL) 
+                roster_free(cnx);
 
         pthread_mutex_destroy(&(cnx->parse_mutex));
         pthread_mutex_destroy(&(cnx->write_mutex));
@@ -498,5 +505,19 @@ void
 jabbah_message_send_chat(jabbah_context_t *cnx, char *jid, char *msg)
 {
         message_send_chat(cnx, jid, msg);
+}
+
+
+void
+jabbah_roster_get(jabbah_context_t *cnx)
+{
+        roster_get(cnx);
+}
+
+
+jabbah_roster_t *
+jabbah_roster_wait(jabbah_context_t *cnx)
+{
+        return roster_wait(cnx);
 }
 

@@ -466,7 +466,10 @@ node_close(jabbah_context_t *cnx, const char *name)
         if (cnx->curr_node->parent != NULL) {
                 cnx->curr_node = cnx->curr_node->parent;
         } else {
-                run_callback(cnx, cnx->curr_node);
+#ifdef DEBUG_PRINT
+                node_print_local(cnx, cnx->curr_node);
+#endif
+		run_callback(cnx, cnx->curr_node);
                 node_free(cnx->curr_node);
                 cnx->curr_node = NULL;
         }
@@ -485,8 +488,24 @@ node_print(jabbah_context_t *cnx, jabbah_node_t *node)
         
         nodeBuff = node_to_string(cnx, node);
         pthread_mutex_lock(&(cnx->write_mutex));
-        write(cnx->sock, nodeBuff, strlen(nodeBuff));
+#ifdef DEBUG_PRINT
+	printf("SEND NODE: %s", nodeBuff);
+#endif
+	write(cnx->sock, nodeBuff, strlen(nodeBuff));
         pthread_mutex_unlock(&(cnx->write_mutex));
+        free(nodeBuff);
+}
+
+void
+node_print_local(jabbah_context_t *cnx, jabbah_node_t *node)
+{
+        char *nodeBuff;
+
+        if (node == NULL || cnx->sock < 0)
+                return;
+        
+        nodeBuff = node_to_string(cnx, node);
+        printf("SEND NODE: \n%s\n", nodeBuff);
         free(nodeBuff);
 }
 
