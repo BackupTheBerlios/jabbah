@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "node.h"
 #include "iq.h"
@@ -113,18 +114,80 @@ add_item(jabbah_roster_t *roster, jabbah_node_t *item)
                 group = group->next;    
         }                            
 
-        if (group_count == 0) {
-                roster->nogroups = (jabbah_roster_item_t **)realloc(roster->nogroups,
-                                                                         sizeof(jabbah_roster_item_t *)*
-                                                                         (++(roster->nogroup_count)));
-                roster->nogroups[roster->nogroup_count - 1] = it;
+
+        //
+        // If it is a transport - move it to transports list or to items list
+        //
+        
+        if (strstr(it->jid, "@") == NULL) {
+                roster->transports = (jabbah_roster_item_t **)realloc(roster->transports,
+                                                                      sizeof(jabbah_roster_item_t *)*
+                                                                      (++(roster->transport_count)));
+                roster->transports[roster->transport_count - 1] = it;
+        } else {
+                if (group_count == 0) {
+                        roster->nogroups = (jabbah_roster_item_t **)realloc(roster->nogroups,
+                                                                            sizeof(jabbah_roster_item_t *)*
+                                                                            (++(roster->nogroup_count)));
+                        roster->nogroups[roster->nogroup_count - 1] = it;
+                }
+
+                roster->items = (jabbah_roster_item_t **)realloc(roster->items,
+                                                                 sizeof(jabbah_roster_item_t *)*
+                                                                 (++(roster->item_count)));
+                roster->items[roster->item_count - 1] = it;
+        }
+}
+
+
+int
+roster_item_compare(const void *a, const void *b)
+{
+        jabbah_roster_item_t **aa = (jabbah_roster_item_t **)a;
+        jabbah_roster_item_t **bb = (jabbah_roster_item_t **)b;
+
+        return strcmp((*aa)->name, (*bb)->name);
+}
+
+
+int
+roster_group_compare(const void *a, const void *b)
+{
+        jabbah_roster_group_t **aa = (jabbah_roster_group_t **)a;
+        jabbah_roster_group_t **bb = (jabbah_roster_group_t **)b;
+
+        return strcmp((*aa)->name,(*bb)->name);
+}
+
+
+int
+roster_res_compare(const void *a, const void *b)
+{
+        jabbah_logged_res_t **aa = (jabbah_logged_res_t **)a;
+        jabbah_logged_res_t **bb = (jabbah_logged_res_t **)b;
+
+        return ((*aa)->prio - (*bb)->prio);
+}
+
+
+jabbah_roster_item_t *
+roster_find(jabbah_context_t *cnx, char *jid)
+{
+        int i = 0;
+
+        for (i = 0; i < cnx->roster->item_count; i++) {
+                if (!strcmp(cnx->roster->items[i]->jid, jid))
+                        return cnx->roster->items[i];
         }
 
-        roster->items = (jabbah_roster_item_t **)realloc(roster->items,
-                                                              sizeof(jabbah_roster_item_t *)*
-                                                              (++(roster->item_count)));
-        roster->items[roster->item_count - 1] = it;
-        printf("Dodalem %d element\n", roster->item_count);
+        for (i = 0; i < cnx->roster->transport_count; i++) {
+                if (!strcmp(cnx->roster->transports[i]->jid, jid))
+                        return cnx->roster->transports[i];
+        }
+
+        
+        
+        return NULL;
 }
 
 
@@ -160,12 +223,36 @@ roster_free(jabbah_context_t *cnx)
         if (r == NULL)
                 return;
         
+        cnx->roster = NULL;
+        
         //
         // Free nogroups list
         //
         if (r->nogroups != NULL) {
                 free(r->nogroups);
                 r->nogroup_count = 0;
+        }
+
+        //
+        // Free transports list
+        //
+        if (r->transports != NULL) {
+                for (i = 0; i < r->transport_count; i++) {
+                        free(r->transports[i]->name);
+                        free(r->transports[i]->jid);
+                        for(j = 0; j < r->transports[i]->res_count; j++) {
+                                if (r->transports[i]->res[j]->resource != NULL)
+                                        free(r->transports[i]->res[j]->resource);
+                                if (r->transports[i]->res[j]->status != NULL)
+                                        free(r->transports[i]->res[j]->status);
+                                free(r->transports[i]->res[j]);
+                        }
+                        if (r->transports[i]->res != NULL)
+                                free(r->transports[i]->res);
+                        free(r->transports[i]);
+                }
+                free(r->transports);
+                r->transport_count = 0;
         }
 
         //
@@ -208,6 +295,30 @@ roster_free(jabbah_context_t *cnx)
         cnx->roster = NULL;
 }
 
+void
+roster_parse_pres_node(jabbah_context_t *cnx, jabbah_node_t *node)
+{
+        jabbah_attr_list_t *attr = node->attributes;
+        char               *type = NULL;
+        char               *from = NULL;
+
+        while (attr != NULL) {
+                if (!strcmp(attr->name, "type")) {
+                        type = (char *)malloc(sizeof(char)*(strlen(attr->value) + 1));
+                        strncpy(type, attr->value, strlen(attr->value));
+                        type[strlen(attr->value)] = '\0';
+                } else if (!strcmp(attr->name, "from")) {
+                        from = (char *)malloc(sizeof(char)*(strlen(attr->value) + 1));
+                        strncpy(from, attr->value, strlen(attr->value));
+                        from[strlen(attr->value)] = '\0';
+                }
+                attr = attr->next;
+        }
+
+        
+                        
+        
+}
 
 
 void
@@ -217,11 +328,10 @@ roster_parse_node (jabbah_context_t *cnx, jabbah_node_t *node)
         jabbah_node_t *item  = NULL;
         query = node->subnodes;
         jabbah_roster_t *r = NULL;
+        int i;
         
-	printf("Entered parse node\n");
         if (cnx->roster != NULL)
                 return;
-	printf("Going..\n");
         
         while (query != NULL && strcmp(query->name, "query"))
                 query = query->next;
@@ -229,29 +339,155 @@ roster_parse_node (jabbah_context_t *cnx, jabbah_node_t *node)
         if (query == NULL)
                 return;
         
-	printf("Going..(have %s node)\n", query->name);
 	
         if (strcmp(query->namespace, "jabber:iq:roster"))
                 return;
-	
-        printf("Going..(namespace approved)\n");
 	
         r = (jabbah_roster_t *)malloc(sizeof(jabbah_roster_t));
         r->item_count  = 0;
         r->group_count = 0;
         r->nogroup_count  = 0;
+        r->transport_count = 0;
         r->items  = NULL;
         r->groups = NULL;
         r->nogroups  = NULL;
+        r->transports = NULL;
 
         item = query->subnodes;
 
         while (item != NULL) {
-		printf("Add item\n");
                 add_item(r, item);
 		item = item->next;
 	}
 
+        // sort groups
+        qsort(r->groups, r->group_count, sizeof(jabbah_roster_group_t *), roster_group_compare);
+        // Sort items
+        qsort(r->items, r->item_count, sizeof(jabbah_roster_item_t *), roster_item_compare);
+        qsort(r->transports, r->transport_count, sizeof(jabbah_roster_item_t *), roster_item_compare);
+        qsort(r->nogroups, r->nogroup_count, sizeof(jabbah_roster_item_t *), roster_item_compare);
+        
+        for (i = 0; i < r->group_count; i++) 
+                qsort(r->groups[i]->items, r->groups[i]->item_count, sizeof(jabbah_roster_item_t *), roster_item_compare);
+
         cnx->roster = r;
 
+}
+
+
+void
+roster_parse_presence(jabbah_context_t *cnx, jabbah_presence_t *pres)
+{
+        jabbah_roster_item_t *it  = NULL;
+        jabbah_logged_res_t  *rsc = NULL;
+        char *jid = NULL;
+        char *res = NULL;
+        int   pos = 0;
+        int   r_add = 1;
+        int   i = 0;
+        
+        if (pres->jid == NULL) return;
+
+        //
+        // Find JID - resource separator.
+        //
+        for (i = 0; i < strlen(pres->jid); i++) 
+                if (pres->jid[i] == '/') {
+                        pos = i;
+                        break;
+                }
+
+        //
+        // Allocate memory for jid and resource and copy that
+        //
+        jid = (char *)malloc(sizeof(char)*(pos+1));
+        if (jid == NULL) return;
+        for (i = 0; i < pos; i++) jid[i] = pres->jid[i];
+        jid[pos] = '\0';
+        
+        res = (char *)malloc(sizeof(char)*(strlen(pres->jid)- pos));
+        if (res == NULL) {
+                free(jid);
+                return;
+        }
+        for (i = pos + 1; i < strlen(pres->jid); i++)
+                res[pos - 1 - i] = pres->jid[i];
+        res[strlen(pres->jid) - pos - 1] = '\0';
+        
+        //
+        // Get roster item of chosen JID
+        //
+        it = roster_find(cnx, jid);
+        if (it == NULL) {
+                free(jid);
+                free(res);
+                return;
+        }
+
+        //
+        // Check if there is this resource online.
+        // If yes - change it
+        // if no - add it if presence is different than offline
+        //
+        pos = -1;
+        for (i = 0; i < it->res_count; i++)
+                if (!strcmp(it->res[i]->resource, res)) {
+                        rsc = it->res[i];
+                        r_add = 0;
+                        pos   = i;
+                }
+
+        if (r_add == 1 && pres->state != STATE_OFFLINE) {
+                rsc = (jabbah_logged_res_t *)malloc(sizeof(jabbah_logged_res_t));
+                rsc->resource = (char *)malloc(sizeof(char)*(strlen(res)+1));
+                strncpy(rsc->resource, res, strlen(res));
+                rsc->resource[strlen(res)] = '\0';
+
+                it->res = (jabbah_logged_res_t **)realloc(it->res, sizeof(jabbah_logged_res_t *)*(++(it->res_count)));
+                it->res[it->res_count - 1] = rsc;
+                rsc->prio = pres->priority;
+
+                qsort(it->res, it->res_count, sizeof(jabbah_logged_res_t *), roster_res_compare);
+        }
+
+        if (rsc == NULL) {
+                free(jid);
+                free(res);
+                return;
+        }
+
+        //
+        // If state is offline - remove resource and resort the rest.
+        // Otherwise - change it
+        //
+        if (pres->state == STATE_OFFLINE) {
+                if (pos > -1) {
+                        for (i = pos + 1; i < it->res_count; i++) 
+                                it->res[i - 1] = it->res[i];
+                        it->res[it->res_count - 1] = NULL;
+
+                        if (rsc->status != NULL)
+                                free(rsc->status);
+
+                        if (rsc->resource != NULL)
+                                free(rsc->resource);
+
+                        free(rsc);
+                }
+        } else {
+                
+                rsc->state = pres->state;
+                
+                if (rsc->status != NULL)
+                        free(rsc->status);
+                
+                if (pres->status != NULL) {
+                        rsc->status = (char *)malloc(sizeof(char)*(strlen(pres->status)+1));
+                        strncpy(rsc->status, pres->status, strlen(pres->status));
+                        rsc->status[strlen(pres->status)] = '\0';
+                }
+        }
+
+        free(jid);
+        free(res);
 }

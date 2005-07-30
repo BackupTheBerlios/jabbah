@@ -142,6 +142,8 @@ typedef struct _jabbah_roster_t {
         int                     group_count;
         jabbah_roster_item_t  **nogroups;
         int                     nogroup_count;
+        jabbah_roster_item_t  **transports;
+        int                     transport_count;
 } jabbah_roster_t;
 
 

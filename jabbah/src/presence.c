@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "node.h"
+#include "roster.h"
 #include "presence.h"
 
 
@@ -129,24 +130,36 @@ presence_parse_node(jabbah_context_t *cnx, jabbah_node_t *node)
         jabbah_presence_t pres;
         jabbah_attr_list_t  *attr = NULL;
         jabbah_node_t       *snode = NULL;
-        int                              i = 0;
+        int                  i = 0;
+        int                  to_roster = 0;
         
         if (cnx->presence_cb == NULL) return;
 
         attr = node->attributes;
        
-        pres.jid       = NULL;
-        pres.state   = STATE_ONLINE;
+        pres.jid    = NULL;
+        pres.state  = STATE_ONLINE;
         pres.status = NULL;
 
         while(attr != NULL) {
-                if (!strcmp("from", attr->name))
+                if (!strcmp("from", attr->name)) {
                         pres.jid = attr->value;
-                else if (!strcmp("type", attr->name) 
-                         && !strcmp("unavailable", attr->value))
-                        pres.state = STATE_OFFLINE;
+                } else if (!strcmp("type", attr->name)) {
+                        if (!strcmp("unavailable", attr->value)) {
+                                pres.state = STATE_OFFLINE;
+                        } else if (!strcmp("error", attr->name)) {
+                                return;
+                        } else {
+                                to_roster = 1;
+                        }
+                }
                 
                 attr = attr->next;        
+        }
+
+        if (to_roster) {
+                roster_parse_pres_node(cnx, presence);
+                return;
         }
         
         snode = node->subnodes;
@@ -166,6 +179,7 @@ presence_parse_node(jabbah_context_t *cnx, jabbah_node_t *node)
                 }
                 snode = snode->next;
         }
-        
+
+        roster_parse_presence(cnx, &pres);
         CALL_HANDLER(cnx->presence_cb, cnx, &pres);       
 }
