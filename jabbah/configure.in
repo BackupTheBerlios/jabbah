@@ -16,7 +16,7 @@ dnl  along with this program; if not, write to the Free Software Foundation,
 dnl  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
 
 
-AC_INIT(jabbah, 0.1.1)
+AC_INIT([jabbah],[0.1.1])
 AC_CONFIG_SRCDIR(src/jabbah.c)
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADER(config.h)
@@ -24,18 +24,37 @@ AC_CONFIG_HEADER(config.h)
 AC_PROG_CC
 AM_PROG_LIBTOOL
 
-dnl Checks for libraries.
-AC_SEARCH_LIBS(socket, socket)
-AC_SEARCH_LIBS(gethostbyname, nsl)
+dnl Code specific 
+AC_C_CONST
+AC_TYPE_SIZE_T
 
+dnl Check default libraries
+AC_CHECK_LIB( [crypto], [EVP_DigestUpdate],,[AC_MSG_ERROR([Sorry, we need openssl crypto...])])
 
 dnl
-dnl Checks for header files.
+dnl Checks for default header files.
 dnl
-AC_CHECK_HEADERS(pthread.h expat.h netinet/in.h)
+AC_CHECK_HEADERS([pthread.h expat.h netinet/in.h netdb.h sys/socket.h])
 
+dnl Checks for default functions
+AC_CHECK_FUNCS([gethostbyname socket strerror strstr uname])
 
+dnl --enable params
+AC_MSG_CHECKING(--enable-ssl argument)
+AC_ARG_ENABLE(ssl, 
+    [  --enable-ssl		  Enable ssl support [[default=yes]]],
+    [enable_ssl=$enableval],
+    [enable_ssl="yes"])
+AC_MSG_RESULT($enable_ssl)
 
-AC_OUTPUT(Makefile \
-	  src/Makefile)
+if test "$enable_ssl" = "yes"; then
+  AC_CHECK_LIB( [ssl], [SSL_free],, [AC_MSG_ERROR([Sorry, we need openssl for ssl support...])])
+  AC_CHECK_HEADERS([openssl/ssl.h openssl/evp.h],, [AC_MSG_ERROR([Sorry, we need openssl for ssl support...])])
+  AC_DEFINE(HAVE_SSL,1,[Define to 1 if you have openssl])
+fi
+
+dnl the output
+AC_CONFIG_FILES([Makefile \
+	  src/Makefile])
+AC_OUTPUT
 

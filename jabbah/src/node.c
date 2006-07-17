@@ -6,6 +6,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include "common.h"
 #include "node.h"
 
 // Macro for simplified running callbacks
@@ -93,22 +94,22 @@ prepare_string(char *s)
                         case '"':
                                 r_len += 5;
                                 r = (char *)realloc(r, r_len);
-                                strncat(r, "&quot;", r_len);
+                                strlcat(r, "&quot;", r_len);
                                 break;
                         case '\'':
                                 r_len += 5;
                                 r = (char *)realloc(r, r_len);
-                                strncat(r, "&apos;", r_len);
+                                strlcat(r, "&apos;", r_len);
                                 break;  
                         case '<':
                                 r_len += 3;
                                 r = (char *)realloc(r, r_len);
-                                strncat(r, "&lt;", r_len);
+                                strlcat(r, "&lt;", r_len);
                                 break;  
                         case '&':
                                 r_len += 4;
                                 r = (char *)realloc(r, r_len);
-                                strncat(r, "&amp;", r_len);
+                                strlcat(r, "&amp;", r_len);
                                 break;
                         default:
                                 r[r_len - 2] = s[i];
@@ -189,13 +190,19 @@ free_attributes(jabbah_attr_list_t *attrs)
         }
 }
 
+/*! \brief  Check if the callback already exists in the context
+ * 	check_callback verifies if the callback name already exits in the given context.
+ *  \param cnx is a context
+ *  \param name is the name of the callback
+ *  \return -1 if the case of error, if not found , 1  if found
+ */
 static int
 check_callback(jabbah_context_t *cnx, char *name)
 {
         node_callback_t *cb_node = NULL;
         
         if (cnx->callbacks == NULL)
-                return 0;
+               return -1;
 
         cb_node = cnx->callbacks;
 
@@ -220,8 +227,7 @@ add_callback(jabbah_context_t *cnx, char *name, void *cb)
 
         // setting name
         cb_node->node_name = (char *)malloc(sizeof(char)*(strlen(name)+1));
-        strncpy(cb_node->node_name, name, strlen(name));
-        cb_node->node_name[strlen(name)] = '\0';
+        strlcpy(cb_node->node_name, name, strlen(name)+1);
 
         // adding pointer to function
         cb_node->callback = cb;
@@ -345,6 +351,9 @@ node_callback_flush(jabbah_context_t *cnx)
 // MAIN NODE FUNCTIONS
 //
 
+/* Node create start a new node
+ * and make cnx->curr_node point to it
+ */
 jabbah_node_t *
 node_create(jabbah_context_t *cnx, const char *name, const char **attr)
 {
@@ -354,22 +363,19 @@ node_create(jabbah_context_t *cnx, const char *name, const char **attr)
         jabbah_namespace_t *node_reg_ns = NULL;
         char               *node_ns     = NULL;
         char               *ns_name     = NULL;
-        int                 delimiter   = 0;
         int                 i;
 
         // Take some info from parent
         if (cnx->curr_node != NULL) {
                 if (cnx->curr_node->lang != NULL) {
                         node_lang = (char *)malloc(sizeof(char)*(strlen(cnx->curr_node->lang)+1));
-                        strncpy(node_lang, cnx->curr_node->lang, strlen(cnx->curr_node->lang));
-                        node_lang[strlen(cnx->curr_node->lang)] = '\0';
+                        strlcpy(node_lang, cnx->curr_node->lang, strlen(cnx->curr_node->lang)+1);
                 }
                 node_reg_ns = node_namespace_copy(cnx->curr_node->registered_ns);
         } else {
                 if (cnx->lang != NULL) {
                         node_lang = (char *)malloc(sizeof(char)*(strlen(cnx->lang)+1));
-                        strncpy(node_lang, cnx->lang, strlen(cnx->lang));
-                        node_lang[strlen(cnx->lang)] = '\0';
+                        strlcpy(node_lang, cnx->lang, strlen(cnx->lang)+1);
                 }
                 node_reg_ns = node_namespace_copy(cnx->ns);
         }
@@ -379,12 +385,10 @@ node_create(jabbah_context_t *cnx, const char *name, const char **attr)
                 if (!strcmp("xml:lang", attr[i])) {
                         if (node_lang != NULL) free(node_lang);
                         node_lang = (char *)malloc(sizeof(char)*(strlen(attr[i+1])+1));
-                        strncpy(node_lang, attr[i+1], strlen(attr[i+1]));
-                        node_lang[strlen(attr[i+1])] = '\0';
+                        strlcpy(node_lang, attr[i+1], strlen(attr[i+1])+1);
                 } else if (!strcmp("xmlns", attr[i])) {
                         node_ns = (char *)malloc(sizeof(char)*(strlen(attr[i+1])+1));
-                        strncpy(node_ns, attr[i+1], strlen(attr[i+1]));
-                        node_ns[strlen(attr[i+1])] = '\0';
+                        strlcpy(node_ns, attr[i+1], strlen(attr[i+1])+1);
                 }
         }
 
@@ -393,7 +397,7 @@ node_create(jabbah_context_t *cnx, const char *name, const char **attr)
                 node_reg_ns = node_namespace_load(node_reg_ns, attr[i], attr[i+1]);
 
         // Clear name (if it is needed)
-        delimiter = 0;
+        int delimiter = 0;
         while (delimiter < strlen(name)) 
                 if (name[delimiter++] == ':') break;
 
@@ -416,16 +420,14 @@ node_create(jabbah_context_t *cnx, const char *name, const char **attr)
 
         // At last, if other methods fail, get the stream namespace
         if (node_ns == NULL && cnx->node_ns != NULL) {
-                node_ns = (char *)malloc(sizeof(char)*strlen(cnx->node_ns));
-                strncpy(node_ns, cnx->node_ns, strlen(cnx->node_ns));
-                node_ns[strlen(cnx->node_ns)] = '\0';
+                node_ns = (char *)malloc(sizeof(char)*strlen(cnx->node_ns)+1);
+                strlcpy(node_ns, cnx->node_ns, strlen(cnx->node_ns)+1);
         }
 
         node = node_full_init(node_name, node_reg_ns, node_ns, node_lang);
-
-       
         node = get_attributes(node, attr);
 
+		// cnx->curr_node doesnt point to a tree node structure, but to the "current node"(strange... strange...)
         cnx->curr_node = node_subnode_add(cnx->curr_node, node);                        
         cnx->curr_node = node;
 
@@ -448,8 +450,7 @@ node_append_value(jabbah_context_t *cnx, const char *value, int len)
 {
         char *val = (char *)malloc(sizeof(char)*(len+1));
 
-        strncpy(val, value, len);
-        val[len] = '\0';
+        strlcpy(val, value, len+1);
         cnx->curr_node = node_value_append(cnx->curr_node, val);
         free(val);
 
@@ -469,9 +470,9 @@ node_close(jabbah_context_t *cnx, const char *name)
 #ifdef DEBUG_PRINT
                 node_print_local(cnx, cnx->curr_node);
 #endif
-		run_callback(cnx, cnx->curr_node);
-                node_free(cnx->curr_node);
-                cnx->curr_node = NULL;
+			run_callback(cnx, cnx->curr_node);
+            node_free(cnx->curr_node);
+            cnx->curr_node = NULL;
         }
 
         return cnx->curr_node;
@@ -481,19 +482,19 @@ node_close(jabbah_context_t *cnx, const char *name)
 void
 node_print(jabbah_context_t *cnx, jabbah_node_t *node)
 {
-        char *nodeBuff;
+    if (node == NULL || cnx->sock < 0)
+    	return;
 
-        if (node == NULL || cnx->sock < 0)
-                return;
-        
-        nodeBuff = node_to_string(cnx, node);
-        pthread_mutex_lock(&(cnx->write_mutex));
+    char *nodeBuff = node_to_string(cnx, node);
+
+    pthread_mutex_lock(&(cnx->write_mutex));
 #ifdef DEBUG_PRINT
-	printf("SEND NODE: %s", nodeBuff);
+	fprintf(stderr,"SEND NODE: %s\n", nodeBuff);
 #endif
 	write(cnx->sock, nodeBuff, strlen(nodeBuff));
-        pthread_mutex_unlock(&(cnx->write_mutex));
-        free(nodeBuff);
+    pthread_mutex_unlock(&(cnx->write_mutex));
+
+    free(nodeBuff);
 }
 
 void
@@ -647,6 +648,10 @@ node_free(jabbah_node_t *node)
 // FUNCTIONS FOR NODE MANIPULATION
 //
 
+
+/*
+ * node_full_init just create a default node, cnx->curr_node mantains unchanged!
+ */
 jabbah_node_t *
 node_full_init(char *name, jabbah_namespace_t *reg_ns, char *ns, char *lang)
 {
@@ -656,13 +661,11 @@ node_full_init(char *name, jabbah_namespace_t *reg_ns, char *ns, char *lang)
                 return NULL;
         
         node = (jabbah_node_t *)malloc(sizeof(jabbah_node_t));
-
         if (node == NULL)
                 return NULL;
 
         node->name = (char *)malloc(sizeof(char)*(strlen(name)+1));
-        strncpy(node->name, name, strlen(name));
-        node->name[strlen(name)] = '\0';
+        strlcpy(node->name, name, strlen(name)+1);
 
         node->value         = NULL;
         node->parent        = NULL;
@@ -672,31 +675,29 @@ node_full_init(char *name, jabbah_namespace_t *reg_ns, char *ns, char *lang)
 
         if (reg_ns != NULL) {
                 node->registered_ns = node_namespace_copy(reg_ns);
-        }
-        else
+        }else
                 node->registered_ns = NULL;
         
         if (ns != NULL) {
                 node->namespace = (char *)malloc(sizeof(char)*(strlen(ns)+1));
-                strncpy(node->namespace, ns, strlen(ns));
-                node->namespace[strlen(ns)] = '\0';
-                                                 
-        }
-        else
+                strlcpy(node->namespace, ns, strlen(ns)+1);
+        } else
                 node->namespace     = NULL;
 
 
         if (lang != NULL) {
-                node->lang = (char *)malloc(sizeof(char)*(strlen(lang+1)));
-                strncpy(node->lang, lang, strlen(lang));
-                node->lang[strlen(lang)] = '\0';
-        }
-        else
+                node->lang = (char *)malloc(sizeof(char)*(strlen(lang)+1));
+                strlcpy(node->lang, lang, strlen(lang)+1);
+        } else
                 node->lang          = NULL;
 
         return node;
 }
 
+/*
+ * node_init is a binding to node_full_init
+ * \sa node_full_init, node_create just create a default node, cnx->curr_node mantains unchanged!
+ */
 jabbah_node_t *
 node_init(char *name)
 {
@@ -704,7 +705,9 @@ node_init(char *name)
 }
 
 
-
+/* Insert the value in the node
+ * <node> value </node>
+ */
 jabbah_node_t *
 node_value_set(jabbah_node_t *node, char *value)
 {
@@ -715,8 +718,7 @@ node_value_set(jabbah_node_t *node, char *value)
                 free(node->value);
         
         node->value = (char *)malloc(sizeof(char)*(strlen(value)+1));
-        strncpy(node->value, value, strlen(value));
-        node->value[strlen(value)] = '\0';
+        strlcpy(node->value, value, strlen(value)+1);
 
         return node;
 }
@@ -734,15 +736,14 @@ node_value_append(jabbah_node_t *node, char *value)
 
         len = strlen(value);
         val = (char *)malloc(sizeof(char)*(len+1));
-        strncpy(val, value, len);
-        val[len] = '\0';
+        strlcpy(val, value, len);
         
         if (node->value == NULL) {
                 node->value = val;
         } else {
                 l = len + strlen(node->value) + 1;
                 node->value = (char *)realloc(node->value, sizeof(char)*l);
-                strncat(node->value, val, l);
+                strlcat(node->value, val, l);
                 free(val);
         }
 
@@ -822,17 +823,14 @@ node_attribute_ns_addz(jabbah_node_t *node, char *attr_name, char *attr_value, c
         attr = (jabbah_attr_list_t *)malloc(sizeof(jabbah_attr_list_t));
 
         attr->name = (char *)malloc(sizeof(char)*(strlen(attr_name)+1));
-        strncpy(attr->name, attr_name, strlen(attr_name));
-        attr->name[strlen(attr_name)] = '\0';
+        strlcpy(attr->name, attr_name, strlen(attr_name)+1);
         
         attr->value = (char *)malloc(sizeof(char)*(strlen(attr_value)+1));
-        strncpy(attr->value, attr_value, strlen(attr_value));
-        attr->value[strlen(attr_value)] = '\0';
+        strlcpy(attr->value, attr_value, strlen(attr_value)+1);
 
         if (ns != NULL) {
                 attr->namespace = (char *)malloc(sizeof(char)*(strlen(ns)+1));
-                strncpy(attr->namespace, ns, strlen(ns));
-                attr->namespace[strlen(ns)] = '\0';
+                strlcpy(attr->namespace, ns, strlen(ns)+1);
         } else
                 attr->namespace = NULL;
 

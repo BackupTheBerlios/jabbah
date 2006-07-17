@@ -1,14 +1,18 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <openssl/evp.h>
+#include <openssl/sha.h>
+
+#include "common.h"
 #include "node.h"
 #include "iq.h"
-#include "sha1.h"
 #include "auth.h"
 
 #define CALL_HANDLER(h,x,y) (((void (*)(jabbah_context_t * , jabbah_auth_result_t *))h)(x, y))
 
-
+// Create a node for the username 
+// and make a query to the server
 static void
 auth_send_type_req(jabbah_context_t *cnx)
 {
@@ -21,31 +25,35 @@ auth_send_type_req(jabbah_context_t *cnx)
 }
 
 
-
+/*
+ * Return a hash(sha1 in hex) of the string given(auth_pass)
+ */
 static char *
 digets_pass(jabbah_context_t *cnx, char *auth_pass)
 {
+		#ifdef HAVE_LIBCRYPTO
+			EVP_MD_CTX 	md_ctx;
+			u_char 		md_value[EVP_MAX_MD_SIZE];									
+			u_int 		md_length=0;
 
-        char       *pass_string = (char *)malloc(sizeof(char)*(strlen(cnx->session_id)+strlen(auth_pass)+1));
-        SHA1Context con;
-        uint8_t     result[SHA1HashSize];
-        char       *hash = (char *)malloc(sizeof(char)*(2*SHA1HashSize+1));
-        int         i = 0;
-        
-        strncpy(pass_string, cnx->session_id, strlen(cnx->session_id));
-        pass_string[strlen(cnx->session_id)] = '\0';
-        strncat(pass_string, cnx->passwd, strlen(cnx->session_id) + strlen(cnx->passwd));
-        
-        SHA1Reset(&con);
-        SHA1Input(&con,  (const uint8_t *)pass_string, strlen(pass_string));
-        SHA1Result(&con, result);
-        
-        for (i = 0; i < SHA1HashSize; i++)
-                sprintf(hash + (2*i), "%02x", result[i]);
-        hash[2*SHA1HashSize] = '\0';
-        free(pass_string);
+			EVP_DigestInit(	 	&md_ctx, EVP_sha1() );
+			EVP_DigestUpdate(  	&md_ctx, auth_pass, (size_t) strlen(auth_pass) );
+			EVP_DigestFinal_ex( &md_ctx, md_value, &md_length);
+			EVP_MD_CTX_cleanup( &md_ctx);
 
-        return hash;
+			u_char *hash = (char *) malloc( sizeof(char) * (md_length*2) ); 
+
+			// Do the print in hexadecimal
+			for(i=0; i < SHA_DIGEST_LENGTH; i++){
+				snprintf(hash+(i*2),3,"%02x", md_value[i]);
+			}
+
+			return hash;
+		#else
+			// OMG FUCKING, We need openssl here!
+			// Should we use the old sha1 interface? ¬¬ 
+			return NULL;
+		#endif
 }
 
 
@@ -165,6 +173,7 @@ auth_manage_auth_response(jabbah_context_t *cnx, jabbah_node_t *node)
         }
 }
 
+// Parse the xml (authentication)
 void
 auth_manage_type_response(jabbah_context_t *cnx, jabbah_node_t *node)
 {
@@ -194,7 +203,6 @@ auth_manage_type_response(jabbah_context_t *cnx, jabbah_node_t *node)
         query = node->subnodes;
 
         while (query != NULL && strcmp(query->name, "query")) query = query->next;
-
         if (query == NULL) {
                 result.code = 404;
                 result.message = "Authorization of jabber:iq:auth unsupported by this server";
@@ -232,24 +240,24 @@ auth_manage_type_response(jabbah_context_t *cnx, jabbah_node_t *node)
         
 }
 
+// Copy the login params to the context, and send
+// a request
 int
-auth_register(jabbah_context_t *cnx, char *login, char *pass, char *resource, void (*cb)(jabbah_context_t *, jabbah_auth_result_t *))
+auth_register( jabbah_context_t *cnx, 
+				char *login, char *pass,  char *resource, 
+				void (*cb)(jabbah_context_t *, jabbah_auth_result_t *))
 {
 
         cnx->login    = (char *)malloc(sizeof(char)*(strlen(login)+1));
-        strncpy(cnx->login, login, strlen(login));
-        cnx->login[strlen(login)] = '\0';
+        strlcpy(cnx->login, login, strlen(login)+1);
         
         cnx->passwd   = (char *)malloc(sizeof(char)*(strlen(pass)+1));
-        strncpy(cnx->passwd, pass, strlen(pass));
-        cnx->passwd[strlen(pass)] = '\0';
+        strlcpy(cnx->passwd, pass, strlen(pass)+1);
         
         cnx->resource = (char *)malloc(sizeof(char)*(strlen(resource)+1));
-        strncpy(cnx->resource, resource, strlen(resource));
-        cnx->resource[strlen(resource)] = '\0';
+        strlcpy(cnx->resource, resource, strlen(resource)+1);
 
         cnx->auth_cb = cb;
-
         auth_send_type_req(cnx);
 
         return 0;

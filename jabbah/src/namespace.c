@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "common.h"
 #include "node.h"
 
 static int
@@ -33,15 +34,12 @@ node_namespace_create(char *id, char *value)
         ns = (jabbah_namespace_t *)malloc(sizeof(jabbah_namespace_t));
 
         ns->id = (char *)malloc(sizeof(char)*(strlen(id)+1));
-        strncpy(ns->id, id, strlen(id));
-        ns->id[strlen(id)] = '\0';
+        strlcpy(ns->id, id, strlen(id)+1);
 
         ns->value = (char *)malloc(sizeof(char)*(strlen(value)+1));
-        strncpy(ns->value, value, strlen(value));
-        ns->value[strlen(value)] = '\0';
+        strlcpy(ns->value, value, strlen(value)+1);
 
         ns->next = NULL;
-
         return ns;
 }
 

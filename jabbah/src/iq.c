@@ -2,6 +2,7 @@
 #include <string.h>
 #include <pthread.h>
 
+#include "common.h"
 #include "version.h"
 #include "node.h"
 #include "iq.h"
@@ -26,8 +27,7 @@ iq_send_response(jabbah_context_t *cnx, char *to, char *id, char *xmlns, jabbah_
         node = node_attribute_add(node, "to", to);
         
         query->namespace = (char *)malloc(sizeof(char)*(strlen(xmlns)+1));
-        strncpy(query->namespace, xmlns, strlen(xmlns));
-        query->namespace[strlen(xmlns)] = '\0';
+        strlcpy(query->namespace, xmlns, strlen(xmlns)+1);
         
         query = node_subnode_add(query, content);
         node  = node_subnode_add(node, query);
@@ -39,14 +39,20 @@ iq_send_response(jabbah_context_t *cnx, char *to, char *id, char *xmlns, jabbah_
 
 
 
+// We mount a iq response(with a query inside)
+// cnx = jabber context
+// type = type of requisition( IQ_GET, IQ_SET )
+// xmlns = Xml namespace
+// request = The query inside the iq tag
+// cb = callback for when response come 
 void
 iq_send_query(jabbah_context_t *cnx, jabbah_iq_type_t type, char *xmlns, jabbah_node_t *request,
               void (*cb)(jabbah_context_t * , jabbah_node_t *))
 {
         // Request vars
-        char *id = (char *)malloc(sizeof(char)*20);
-        jabbah_req_list_t *req = (jabbah_req_list_t *)malloc(sizeof(jabbah_req_list_t));
-        jabbah_req_list_t *r_list = NULL;
+        char 				*id   	= (char *) malloc(sizeof(char)*20);
+        jabbah_req_list_t 	*req  	= (jabbah_req_list_t *) malloc(sizeof(jabbah_req_list_t));
+        jabbah_req_list_t 	*r_list = NULL;
 
         pthread_mutex_lock(&(cnx->iq_mutex)); 
 
@@ -54,7 +60,8 @@ iq_send_query(jabbah_context_t *cnx, jabbah_iq_type_t type, char *xmlns, jabbah_
         // Node vars
         jabbah_node_t *node  = node_init("iq");
         jabbah_node_t *query = node_init("query");
-        
+       
+	   	// Well, session can be more than 16 bytes, but ok, no security holes here :)	
         snprintf(id, 20, "req_%d", ++(cnx->req_id));
         req->next = NULL;
         req->prev = NULL;
@@ -83,13 +90,12 @@ iq_send_query(jabbah_context_t *cnx, jabbah_iq_type_t type, char *xmlns, jabbah_
         }
                         
         node = node_attribute_add(node, "id", id);
-        if (strcmp(xmlns, "jabber:iq:roster"))
-		node = node_attribute_add(node, "to", cnx->server_address);
+        if (! strcmp(xmlns, "jabber:iq:roster"))
+			node = node_attribute_add(node, "to", cnx->server_address);
 	
 
         query->namespace = (char *)malloc(sizeof(char)*(strlen(xmlns)+1));
-        strncpy(query->namespace, xmlns, strlen(xmlns));
-        query->namespace[strlen(xmlns)] = '\0';
+        strlcpy(query->namespace, xmlns, strlen(xmlns)+1);
 
         if (request != NULL)
                 query = node_subnode_add(query, request);

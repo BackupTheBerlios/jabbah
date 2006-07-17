@@ -1,3 +1,8 @@
+2006-07-16 22:14 Frangossauro <frangossauro@gmail.com>
+	* Autotools fixed
+	* Rebuild the old sha1 interface to the OpenSSL Crypto Interface 
+	* Refactored strcpy to strlcpy(faster and more secure) 
+
 2005-07-24 02:16 Bazyli Zygan <bazyli@gmail.com>
 	* Added headers for Mac OS X compilation
 	

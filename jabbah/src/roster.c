@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common.h"
 #include "node.h"
 #include "iq.h"
 #include "roster.h"
@@ -305,12 +306,10 @@ roster_parse_pres_node(jabbah_context_t *cnx, jabbah_node_t *node)
         while (attr != NULL) {
                 if (!strcmp(attr->name, "type")) {
                         type = (char *)malloc(sizeof(char)*(strlen(attr->value) + 1));
-                        strncpy(type, attr->value, strlen(attr->value));
-                        type[strlen(attr->value)] = '\0';
+                        strlcpy(type, attr->value, strlen(attr->value));
                 } else if (!strcmp(attr->name, "from")) {
                         from = (char *)malloc(sizeof(char)*(strlen(attr->value) + 1));
-                        strncpy(from, attr->value, strlen(attr->value));
-                        from[strlen(attr->value)] = '\0';
+                        strlcpy(from, attr->value, strlen(attr->value));
                 }
                 attr = attr->next;
         }

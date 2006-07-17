@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 
+#include "common.h"
 #include "node.h"
 #include "message.h"
 

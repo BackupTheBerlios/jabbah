@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../config.h"
+#include "common.h"
 #include "node.h"
 #include "iq.h"
 #include "version.h"

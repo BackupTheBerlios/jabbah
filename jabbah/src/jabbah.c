@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "common.h"
 #include "message.h"
 #include "presence.h"
 #include "node.h"
@@ -33,38 +34,39 @@
 #define BUFFSIZE
 
 
+/* Xml Functions */
+
+// We parse a xml sended by the server
+// save the session attributes or append the node(for later specific parsing).
 static void XMLCALL
 start(void *data, const char *el, const char **attr)
 {
   int i = 0;
   jabbah_context_t *cnx = (jabbah_context_t *)data;
   
-  if (!strcmp("stream:stream", el))
-  {
+  if (!strcmp("stream:stream", el)) {
     cnx->opened_session = 1;
-    // Getting session id
-    for (i = 0; attr[i]; i += 2)
-      if (!strcmp("id", attr[i]))
-      {
+
+    // Getting the params
+	// Because attr is a double pointer, i = attribute_name, i+1 = attribute_value
+    for (i = 0; attr[i]; i += 2){
+      if (!strcmp("id", attr[i])){
               cnx->session_id = (char *)malloc(sizeof(char)*(strlen(attr[i+1])+1));
-              strncpy(cnx->session_id, attr[i+1], strlen(attr[i+1]));
-              cnx->session_id[strlen(attr[i+1])] = '\0';
+              strlcpy(cnx->session_id, attr[i+1], strlen(attr[i+1])+1);
       } else if (!strcmp("xml:lang", attr[i])) {
               cnx->lang = (char *)malloc(sizeof(char)*(strlen(attr[i+1])+1));
-              strncpy(cnx->lang, attr[i+1], strlen(attr[i+1]));
-              cnx->lang[strlen(attr[i+1])] = '\0';
+              strlcpy(cnx->lang, attr[i+1], strlen(attr[i+1])+1);
       } else if (!strcmp("xmlns", attr[i])) {
               cnx->node_ns = (char *)malloc(sizeof(char)*(strlen(attr[i+1])+1));
-              strncpy(cnx->node_ns, attr[i+1], strlen(attr[i+1]));
-              cnx->node_ns[strlen(attr[i+1])] = '\0';
+              strlcpy(cnx->node_ns, attr[i+1], strlen(attr[i+1])+1);
       } else {
               node_namespace_load(cnx->ns , attr[i], attr[i+1]);
-
       }
+	}
     if (cnx->stream_callback != NULL)
             CALL_HANDLER(cnx->stream_callback, 0);
-  }
-  else {
+
+  } else {
           if (cnx->opened_session == 1) {
                   pthread_mutex_lock(&(cnx->parse_mutex));
                   node_create(cnx, el, attr);
@@ -75,7 +77,8 @@ start(void *data, const char *el, const char **attr)
 }
 
 
-
+// We parse the inner xml (where it is value)
+// <xml>Value</xml>
 static void XMLCALL
 data(void *data, const XML_Char *s, int len)
 {
@@ -89,27 +92,28 @@ data(void *data, const XML_Char *s, int len)
 }
 
 
-
+// Here the end tags are parsed
+// And we call the apropriated callback for the tag
+// in node_close
 static void XMLCALL
 end(void *data, const char *el)
 {
         jabbah_context_t *cnx = (jabbah_context_t *)data;
-        
-        if (!strcmp("stream:stream", el))
-                {
-                        cnx->opened_session = -1;
-                }
-        else {
+       
+	   	// The connection was closed? 	
+        if (!strcmp("stream:stream", el)){
+                cnx->opened_session = -1;
+		} else {
                 if (cnx->opened_session == 1) {
                         pthread_mutex_lock(&(cnx->parse_mutex));
-                        node_close(cnx, el);
+                        node_close(cnx, el); 		// Please note that node_close will call the apropriated callback( if is closing iq, message or presence ) 
                         pthread_mutex_unlock(&(cnx->parse_mutex));
                 }
         }
-
 }
 
-
+// This function will expect for any input
+// and will survive forever, in parse_thread
 void
 parseIt(jabbah_context_t *cnx)
 {
@@ -126,16 +130,15 @@ parseIt(jabbah_context_t *cnx)
     if (cnx->opened_session == -1) break;
     
     len = recv(cnx->sock, &(cnx->buff), 1, 0);
-            
     if (len == -1) {
-            printf("ERROR: %s\n", strerror(errno));
+            fprintf(stderr,"ERROR: %s\n", strerror(errno));
             break;
     }
 //    done = eof(sock);
 
     //printf("DEBUG: %s", buff);
     if (XML_Parse(cnx->p, &(cnx->buff), len, 0) == XML_STATUS_ERROR) {
-            printf("Parse error at line %d:\n%s\n",
+            fprintf(stderr,"Parse error at line %d:\n%s\n",
                    XML_GetCurrentLineNumber(cnx->p),
                    XML_ErrorString(XML_GetErrorCode(cnx->p)));
             close(cnx->sock);
@@ -161,7 +164,6 @@ parsing_thread(void *p)
         node_callback_register(cnx, "presence", presence_parse_node);
         node_callback_register(cnx, "iq", iq_parse_node);
 
-        
         parseIt(cnx);
         pthread_exit(NULL);
 }
@@ -184,10 +186,9 @@ authorize(jabbah_context_t *cnx, jabbah_auth_result_t *auth)
 
 
 jabbah_context_t *
-jabbah_context_create(char *server_addr, int server_port, int ssl)
+jabbah_context_create(char *server_addr, u_int server_port, int ssl)
 {
         jabbah_context_t *cnx = NULL;
-
         cnx = (jabbah_context_t *)malloc(sizeof(jabbah_context_t));
 
         if (cnx == NULL)
@@ -205,16 +206,18 @@ jabbah_context_create(char *server_addr, int server_port, int ssl)
         cnx->node_ns = NULL;
         cnx->stream_callback = NULL;
 
-        
+       
+	    // XMPP compliant
+		if(strlen(server_addr) > 1023 || strlen(server_addr) < 0)
+			return NULL;	
+
         cnx->server_address = (char *)malloc(sizeof(char)*(strlen(server_addr)+1));
         if (cnx->server_address == NULL) {
                 free(cnx);
                 return NULL;
         }
-        strncpy(cnx->server_address, server_addr, strlen(server_addr));
-        cnx->server_address[strlen(server_addr)] = '\0';
-                
-        
+        strlcpy(cnx->server_address, server_addr, strlen(server_addr)+1);
+       
         cnx->server_port = server_port;
         cnx->ssl = ssl;
 
@@ -321,6 +324,14 @@ jabbah_context_destroy(jabbah_context_t *cnx)
         free(cnx);
 }
 
+#define DNS_ERROR 	 			-1
+#define SOCK_CREAT_ERROR 		-2
+#define CONNECT_FAIL 			-3
+#define THR_PARSE_CREAT_ERROR 	-5
+#define AUTHORIZATION_ERROR 	-6
+#define LOGIN_TOO_BIG 			-7
+#define RESOURCE_TOO_BIG 		-8
+#define NO_MEM 					-10
 int
 jabbah_connect(jabbah_context_t *cnx, char *login, char *passwd, char *resource, int prio)
 {
@@ -333,34 +344,33 @@ jabbah_connect(jabbah_context_t *cnx, char *login, char *passwd, char *resource,
         int                 init_len = 0;
         int                 ret = 0;
 
+		// We check for node and resource is too big(xmpp reference)
+		if(strlen(login) > 1023)  	return LOGIN_TOO_BIG;
+		if(strlen(resource) > 1023) return RESOURCE_TOO_BIG;
 
         pthread_mutex_init(&(cnx->parse_mutex), NULL);
-        
-        presence_init(cnx, prio);
+        presence_init(cnx, prio); 				// Sounds stupid, but actually it only set cnx->prio = prio
         
         // First - resolve host name
         ht = gethostbyname(cnx->server_address);
-
         if (!ht)
-                return -1;
+                return DNS_ERROR;
 
         host_addr = * (struct in_addr *) ht->h_addr_list[0];
 
-        // Now try to create socket
+        // Try to create the socket
         cnx->sock = socket(PF_INET, SOCK_STREAM, 0);
-
         if (cnx->sock == -1)
-                return -2;
+                return SOCK_CREAT_ERROR;
 
-        // Now - connect!
+        // Now connect!
         st.sin_family = AF_INET;
         st.sin_addr   = host_addr;
         st.sin_port   = htons(cnx->server_port);
         
         ret = connect (cnx->sock, (struct sockaddr *) & st, sizeof (st));
-
         if (ret ==  -1) {                
-                return -3;
+                return CONNECT_FAIL;
         }
         
         //TODO: SSL SUPPORT
@@ -375,29 +385,33 @@ jabbah_connect(jabbah_context_t *cnx, char *login, char *passwd, char *resource,
         REMEMBER TO FREE ctx_resource! SSL_CTX_free (ssl_ctx);*/
 
         // Send welcome massage to the server
-        init_stream = (char *)malloc(sizeof(char)*1024);
+		// Possible buffer overflow fixed by <frangossauro@gmail.com> at 10/07/06  
+		init_stream = (char *) malloc(sizeof(char) * (116 + strlen(cnx->server_address) + 1));
         if (init_stream == NULL)
-                return -10;
+                return NO_MEM;
 
-        init_len = sprintf(init_stream, "<?xml version='1.0'?>\n<stream:stream xmlns:stream='http://etherx.jabber.org/streams' xmlns='jabber:client' to='%s'>\n\n", cnx->server_address);
+		// TODO:  Use the node API, instead of handcoded xml
+        init_len = sprintf(init_stream, "<?xml version='1.0'?>\n"
+										"<stream:stream xmlns:stream='http://etherx.jabber.org/streams' xmlns='jabber:client' to='%s'>\n\n",
+									   	cnx->server_address);
         write(cnx->sock, init_stream, init_len);
         free(init_stream);
         
         // Now start parsing thread
         if (pthread_create(&(cnx->parse_thread), NULL, parsing_thread, (void *)cnx))
-                return -5;
+                return THR_PARSE_CREAT_ERROR;
 
-        // Wait until session will be opened
-        while (!(cnx->opened_session)) sleep(1);
+        // Wait until session will be opened (400 microseconds sounds more appropriate...)
+        while (!(cnx->opened_session)) 
+			usleep( 400 );
 
         // Now try to authorize
         auth_register(cnx, login, passwd, resource, authorize);
 
         // wait for authorization
         while (cnx->authorization == 0) sleep(1);
-
         if (cnx->authorization == -1) {
-                return -6;
+                return AUTHORIZATION_ERROR;
         }
         
         return 0;

@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 
+#include "common.h"
 #include "node.h"
 #include "roster.h"
 #include "presence.h"
@@ -127,7 +128,7 @@ presence_set(jabbah_context_t *cnx, jabbah_presence_t *presence)
 void                      
 presence_parse_node(jabbah_context_t *cnx, jabbah_node_t *node)
 {
-        jabbah_presence_t pres;
+        jabbah_presence_t 	pres;
         jabbah_attr_list_t  *attr = NULL;
         jabbah_node_t       *snode = NULL;
         int                  i = 0;
@@ -158,7 +159,7 @@ presence_parse_node(jabbah_context_t *cnx, jabbah_node_t *node)
         }
 
         if (to_roster) {
-                roster_parse_pres_node(cnx, presence);
+                roster_parse_pres_node(cnx, node);
                 return;
         }
         
